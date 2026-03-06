@@ -63,11 +63,15 @@ export default function MedicalRecordsPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Dossiers médicaux</h1>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          + Nouveau dossier
-        </button>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Dossiers médicaux</h1>
+        </div>
+        <div className="page-header-actions">
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+            + Nouveau dossier
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -144,7 +148,7 @@ export default function MedicalRecordsPage() {
                 </tr>
               ))}
               {records.length === 0 && (
-                <tr><td colSpan="5" style={{ textAlign: 'center', color: 'var(--gray-400)' }}>Aucun dossier</td></tr>
+                <tr><td colSpan="5" className="table-empty">Aucun dossier</td></tr>
               )}
             </tbody>
           </table>

@@ -35,12 +35,12 @@ export default function ClientDetailPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <div>
-          <Link to="/clients" style={{ color: 'var(--gray-400)', textDecoration: 'none', fontSize: '0.85rem' }}>
+      <div className="page-header">
+        <div className="page-header-left">
+          <Link to="/clients" className="breadcrumb-link">
             Clients /
           </Link>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>
+          <h1 className="page-title">
             {client.last_name} {client.first_name}
           </h1>
         </div>
@@ -76,9 +76,9 @@ export default function ClientDetailPage() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+      <div className="tabs">
         {['animals', 'invoices', 'communications'].map((t) => (
-          <button key={t} className={`btn ${tab === t ? 'btn-primary' : 'btn-secondary'} btn-sm`} onClick={() => setTab(t)}>
+          <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
             {t === 'animals' ? 'Animaux' : t === 'invoices' ? 'Factures' : 'Communications'}
           </button>
         ))}
@@ -91,7 +91,7 @@ export default function ClientDetailPage() {
             <tbody>
               {animals.map((a) => (
                 <tr key={a.id}>
-                  <td><Link to={`/animals/${a.id}`} style={{ color: 'var(--primary)', textDecoration: 'none' }}>{a.name}</Link></td>
+                  <td><Link to={`/animals/${a.id}`} className="table-link">{a.name}</Link></td>
                   <td>{a.species}</td>
                   <td>{a.breed || '-'}</td>
                   <td>{a.sex}</td>

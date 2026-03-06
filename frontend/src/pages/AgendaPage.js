@@ -66,9 +66,11 @@ export default function AgendaPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Agenda</h1>
-        <div style={{ display: 'flex', gap: '8px' }}>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Agenda</h1>
+        </div>
+        <div className="page-header-actions">
           <input
             type="date"
             className="form-input"
@@ -129,10 +131,10 @@ export default function AgendaPage() {
       )}
 
       {/* Legend */}
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
+      <div className="agenda-legend">
         {Object.entries(typeLabels).map(([k, v]) => (
-          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}>
-            <div style={{ width: 12, height: 12, borderRadius: '50%', background: typeColors[k] }} />
+          <div key={k} className="agenda-legend-item">
+            <div className="agenda-legend-dot" style={{ background: typeColors[k] }} />
             {v}
           </div>
         ))}
@@ -147,15 +149,10 @@ export default function AgendaPage() {
           <p style={{ color: 'var(--gray-400)', textAlign: 'center' }}>Aucun RDV pour cette date</p>
         ) : (
           appointments.map((appt) => (
-            <div key={appt.id} style={{
-              display: 'flex',
-              alignItems: 'center',
-              padding: '12px 16px',
+            <div key={appt.id} className="agenda-slot" style={{
               borderLeft: `4px solid ${typeColors[appt.appointment_type] || typeColors.other}`,
-              borderBottom: '1px solid var(--gray-100)',
-              gap: '16px',
             }}>
-              <div style={{ minWidth: '100px', fontWeight: 600 }}>
+              <div className="agenda-slot-time">
                 {new Date(appt.start_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                 {' - '}
                 {new Date(appt.end_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}

@@ -62,12 +62,16 @@ export default function AnimalDetailPage() {
 
   return (
     <div>
-      <Link to="/animals" style={{ color: 'var(--gray-400)', textDecoration: 'none', fontSize: '0.85rem' }}>
-        Animaux /
-      </Link>
-      <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '16px' }}>
-        {animal.name}
-      </h1>
+      <div className="page-header">
+        <div className="page-header-left">
+          <Link to="/animals" className="breadcrumb-link">
+            Animaux /
+          </Link>
+          <h1 className="page-title">
+            {animal.name}
+          </h1>
+        </div>
+      </div>
 
       {/* Alerts */}
       {animal.alerts?.filter((a) => a.is_active).map((alert) => (
@@ -91,9 +95,9 @@ export default function AnimalDetailPage() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+      <div className="tabs">
         {['info', 'weight', 'medical'].map((t) => (
-          <button key={t} className={`btn ${tab === t ? 'btn-primary' : 'btn-secondary'} btn-sm`} onClick={() => setTab(t)}>
+          <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
             {t === 'info' ? 'Informations' : t === 'weight' ? 'Courbe de poids' : 'Dossier médical'}
           </button>
         ))}

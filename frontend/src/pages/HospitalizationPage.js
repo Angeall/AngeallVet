@@ -56,9 +56,13 @@ export default function HospitalizationPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Hospitalisation</h1>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouvelle hospitalisation</button>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Hospitalisation</h1>
+        </div>
+        <div className="page-header-actions">
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouvelle hospitalisation</button>
+        </div>
       </div>
 
       {showForm && (
@@ -87,8 +91,10 @@ export default function HospitalizationPage() {
       )}
 
       {hospitalizations.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '48px', color: 'var(--gray-400)' }}>
-          Aucune hospitalisation active
+        <div className="empty-state">
+          <div className="empty-state-icon">🏥</div>
+          <h3>Aucune hospitalisation active</h3>
+          <p>Les animaux hospitalisés apparaîtront ici</p>
         </div>
       ) : (
         hospitalizations.map((h) => (
@@ -108,13 +114,13 @@ export default function HospitalizationPage() {
             </p>
 
             {h.care_tasks && h.care_tasks.length > 0 && (
-              <div style={{ marginTop: '12px' }}>
-                <h4 style={{ fontSize: '0.9rem', marginBottom: '8px' }}>Feuille de soins</h4>
+              <div className="care-sheet">
+                <h4 className="care-sheet-title">Feuille de soins</h4>
                 <table>
                   <thead><tr><th>Heure</th><th>Type</th><th>Description</th><th>Statut</th><th></th></tr></thead>
                   <tbody>
                     {h.care_tasks.map((task) => (
-                      <tr key={task.id} style={{ opacity: task.is_completed ? 0.5 : 1 }}>
+                      <tr key={task.id} className={`care-task ${task.is_completed ? 'completed' : ''}`}>
                         <td>{new Date(task.scheduled_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
                         <td><span className="badge badge-blue">{task.task_type}</span></td>
                         <td>{task.description}</td>

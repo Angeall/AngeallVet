@@ -64,9 +64,13 @@ export default function EstimatesPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Devis</h1>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouveau devis</button>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Devis</h1>
+        </div>
+        <div className="page-header-actions">
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouveau devis</button>
+        </div>
       </div>
 
       {showForm && (
@@ -84,7 +88,7 @@ export default function EstimatesPage() {
               </div>
             </div>
             {form.lines.map((line, idx) => (
-              <div className="form-row" key={idx} style={{ marginBottom: '8px' }}>
+              <div className="line-item-row" key={idx}>
                 <div className="form-group"><input className="form-input" placeholder="Description" value={line.description} onChange={(e) => updateLine(idx, 'description', e.target.value)} required /></div>
                 <div className="form-group" style={{ maxWidth: '100px' }}><input type="number" className="form-input" placeholder="Qté" value={line.quantity} onChange={(e) => updateLine(idx, 'quantity', e.target.value)} /></div>
                 <div className="form-group" style={{ maxWidth: '120px' }}><input type="number" step="0.01" className="form-input" placeholder="Prix HT" value={line.unit_price} onChange={(e) => updateLine(idx, 'unit_price', e.target.value)} required /></div>
@@ -122,7 +126,7 @@ export default function EstimatesPage() {
                 </tr>
               ))}
               {estimates.length === 0 && (
-                <tr><td colSpan="6" style={{ textAlign: 'center', color: 'var(--gray-400)' }}>Aucun devis</td></tr>
+                <tr><td colSpan="6" className="table-empty">Aucun devis</td></tr>
               )}
             </tbody>
           </table>

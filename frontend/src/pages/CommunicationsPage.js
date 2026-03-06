@@ -43,14 +43,18 @@ export default function CommunicationsPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Communications</h1>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Envoyer un message</button>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Communications</h1>
+        </div>
+        <div className="page-header-actions">
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Envoyer un message</button>
+        </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-        <button className={`btn ${tab === 'history' ? 'btn-primary' : 'btn-secondary'} btn-sm`} onClick={() => setTab('history')}>Historique</button>
-        <button className={`btn ${tab === 'reminders' ? 'btn-primary' : 'btn-secondary'} btn-sm`} onClick={() => setTab('reminders')}>Règles de rappel</button>
+      <div className="tabs">
+        <button className={tab === 'history' ? 'tab active' : 'tab'} onClick={() => setTab('history')}>Historique</button>
+        <button className={tab === 'reminders' ? 'tab active' : 'tab'} onClick={() => setTab('reminders')}>Règles de rappel</button>
       </div>
 
       {showForm && (
@@ -122,7 +126,7 @@ export default function CommunicationsPage() {
                 </tr>
               ))}
               {rules.length === 0 && (
-                <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--gray-400)' }}>Aucune règle configurée</td></tr>
+                <tr><td colSpan="7" className="table-empty">Aucune règle configurée</td></tr>
               )}
             </tbody>
           </table>

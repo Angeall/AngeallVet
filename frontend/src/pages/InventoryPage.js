@@ -50,9 +50,14 @@ export default function InventoryPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Stocks & Pharmacie</h1>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouveau produit</button>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Stocks & Pharmacie</h1>
+          <span className="page-subtitle">{products.length} produit(s)</span>
+        </div>
+        <div className="page-header-actions">
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouveau produit</button>
+        </div>
       </div>
 
       {alerts.length > 0 && (
@@ -136,6 +141,9 @@ export default function InventoryPage() {
                   <td>{parseFloat(p.stock_alert_threshold)}</td>
                 </tr>
               ))}
+              {products.length === 0 && (
+                <tr><td colSpan="7" className="table-empty">Aucun produit trouvé</td></tr>
+              )}
             </tbody>
           </table>
         </div>

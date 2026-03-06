@@ -46,20 +46,26 @@ export default function WaitingRoomPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Salle d'attente</h1>
-        <button className="btn btn-secondary btn-sm" onClick={load}>Rafraîchir</button>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Salle d'attente</h1>
+        </div>
+        <div className="page-header-actions">
+          <button className="btn btn-secondary btn-sm" onClick={load}>Rafraîchir</button>
+        </div>
       </div>
 
       {appointments.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '48px', color: 'var(--gray-400)' }}>
-          Personne en salle d'attente
+        <div className="empty-state">
+          <div className="empty-state-icon">🪑</div>
+          <h3>Personne en salle d'attente</h3>
+          <p>Les patients apparaîtront ici dès leur arrivée</p>
         </div>
       ) : (
         appointments.map((appt) => (
           <div key={appt.id} className={`waiting-room-card ${appt.status.replace('_', '-')}`}>
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: '4px' }}>
+            <div className="waiting-room-info">
+              <div className="waiting-room-time">
                 {new Date(appt.start_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                 {' - '}
                 {appt.reason || appt.appointment_type}

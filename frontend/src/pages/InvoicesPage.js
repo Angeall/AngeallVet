@@ -64,9 +64,13 @@ export default function InvoicesPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Factures</h1>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouvelle facture</button>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Factures</h1>
+        </div>
+        <div className="page-header-actions">
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouvelle facture</button>
+        </div>
       </div>
 
       {showForm && (
@@ -85,7 +89,7 @@ export default function InvoicesPage() {
             </div>
             <h4 style={{ marginBottom: '8px' }}>Lignes de facture</h4>
             {form.lines.map((line, idx) => (
-              <div className="form-row" key={idx} style={{ marginBottom: '8px' }}>
+              <div className="line-item-row" key={idx}>
                 <div className="form-group">
                   <input className="form-input" placeholder="Description" value={line.description} onChange={(e) => updateLine(idx, 'description', e.target.value)} required />
                 </div>
@@ -133,7 +137,7 @@ export default function InvoicesPage() {
                 </tr>
               ))}
               {invoices.length === 0 && (
-                <tr><td colSpan="8" style={{ textAlign: 'center', color: 'var(--gray-400)' }}>Aucune facture</td></tr>
+                <tr><td colSpan="8" className="table-empty">Aucune facture</td></tr>
               )}
             </tbody>
           </table>

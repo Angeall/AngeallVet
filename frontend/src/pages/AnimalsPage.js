@@ -24,18 +24,24 @@ export default function AnimalsPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Animaux</h1>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Animaux</h1>
+          <span className="page-subtitle">{animals.length} animal(aux) enregistré(s)</span>
+        </div>
       </div>
 
       <div className="card">
         <div className="form-row" style={{ marginBottom: '16px' }}>
-          <input
-            className="form-input"
-            placeholder="Rechercher par nom, puce, tatouage..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <div className="search-input-wrapper">
+            <span className="search-icon">🔍</span>
+            <input
+              className="form-input"
+              placeholder="Rechercher par nom, puce, tatouage..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
           <select className="form-select" value={speciesFilter} onChange={(e) => setSpeciesFilter(e.target.value)}>
             <option value="">Toutes espèces</option>
             <option value="dog">Chien</option>
@@ -64,7 +70,7 @@ export default function AnimalsPage() {
               {animals.map((a) => (
                 <tr key={a.id}>
                   <td>
-                    <Link to={`/animals/${a.id}`} style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}>
+                    <Link to={`/animals/${a.id}`} className="table-link">
                       {a.name}
                     </Link>
                     {a.is_deceased && <span className="badge badge-gray" style={{ marginLeft: '8px' }}>Décédé</span>}
@@ -84,7 +90,7 @@ export default function AnimalsPage() {
                 </tr>
               ))}
               {animals.length === 0 && (
-                <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--gray-400)' }}>Aucun animal trouvé</td></tr>
+                <tr><td colSpan="7" className="table-empty">Aucun animal trouvé</td></tr>
               )}
             </tbody>
           </table>

@@ -51,18 +51,23 @@ export default function UsersPage() {
 
   if (currentUser?.role !== 'admin') {
     return (
-      <div className="card" style={{ textAlign: 'center', padding: '48px' }}>
-        <h2>Accès restreint</h2>
-        <p style={{ color: 'var(--gray-400)' }}>Seuls les administrateurs peuvent gérer les utilisateurs.</p>
+      <div className="empty-state">
+        <div className="empty-state-icon">🔒</div>
+        <h3>Accès restreint</h3>
+        <p>Seuls les administrateurs peuvent gérer les utilisateurs.</p>
       </div>
     );
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Utilisateurs (RBAC)</h1>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouvel utilisateur</button>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Utilisateurs (RBAC)</h1>
+        </div>
+        <div className="page-header-actions">
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouvel utilisateur</button>
+        </div>
       </div>
 
       {showForm && (
@@ -114,7 +119,7 @@ export default function UsersPage() {
           <tbody>
             {users.map((u) => (
               <tr key={u.id}>
-                <td style={{ fontWeight: 500 }}>{u.last_name} {u.first_name}</td>
+                <td className="table-link">{u.last_name} {u.first_name}</td>
                 <td>{u.email}</td>
                 <td><span className={`badge badge-${u.role === 'admin' ? 'red' : u.role === 'veterinarian' ? 'green' : u.role === 'accountant' ? 'purple' : 'blue'}`}>{roleLabels[u.role]}</span></td>
                 <td><span className={`badge badge-${u.is_active ? 'green' : 'red'}`}>{u.is_active ? 'Actif' : 'Inactif'}</span></td>
