@@ -19,16 +19,25 @@ Application métier complète pour cliniques vétérinaires. Gestion des patient
 
 - **Backend**: Python 3.12, FastAPI, SQLAlchemy 2, PostgreSQL
 - **Frontend**: React 18, React Router, Recharts, FullCalendar
-- **Auth**: JWT (access + refresh tokens), RBAC
+- **Auth**: Supabase Auth (JWT, sessions, MFA-ready), RBAC local
 - **Infra**: Docker Compose
 
 ## Démarrage Rapide
+
+### Prérequis : Supabase
+
+1. Créer un projet sur [supabase.com](https://supabase.com)
+2. Récupérer dans **Settings > API** :
+   - `SUPABASE_URL` (Project URL)
+   - `SUPABASE_ANON_KEY` (anon public key)
+   - `SUPABASE_SERVICE_ROLE_KEY` (service_role key)
+   - `SUPABASE_JWT_SECRET` (JWT Secret, dans Settings > API > JWT Settings)
 
 ### Avec Docker
 
 ```bash
 cp .env.example .env
-# Ajuster les valeurs dans .env
+# Remplir les clés Supabase dans .env
 docker-compose up -d
 ```
 
@@ -113,8 +122,9 @@ AngeallVet/
 Toutes les variables de configuration sont dans `.env.example`. Copier vers `.env` et ajuster avant déploiement.
 
 Variables clés :
-- `DATABASE_URL` : Connexion PostgreSQL
-- `AUTH_SECRET_KEY` : Clé secrète JWT (changer impérativement en production)
+- `DATABASE_URL` : Connexion PostgreSQL (base applicative, pas la base Supabase)
+- `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_JWT_SECRET` : Auth Supabase
+- `REACT_APP_SUPABASE_URL` / `REACT_APP_SUPABASE_ANON_KEY` : Auth côté frontend
 - `SMTP_*` : Configuration email pour les rappels
 - `SMS_*` : Configuration SMS (Twilio)
 - `STRIPE_*` : Intégration paiement
@@ -125,4 +135,5 @@ Variables clés :
 - Chiffrement des données sensibles configurable via `ENCRYPTION_KEY`
 - Rétention des données configurable via `DATA_RETENTION_YEARS`
 - Suppression logique (soft delete) des clients
-- Journalisation des accès via les tokens JWT
+- Journalisation des accès via les tokens JWT Supabase
+- Authentification déléguée à Supabase (pas de stockage local de mots de passe)

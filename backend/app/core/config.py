@@ -16,11 +16,11 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql://angeallvet:angeallvet_dev@localhost:5432/angeallvet"
 
-    # Auth
-    AUTH_SECRET_KEY: str = "dev-auth-secret"
-    AUTH_ALGORITHM: str = "HS256"
-    AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    AUTH_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Supabase Auth
+    SUPABASE_URL: str = ""
+    SUPABASE_ANON_KEY: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    SUPABASE_JWT_SECRET: str = ""
 
     # Email
     SMTP_HOST: str = ""

@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from app.core.database import SessionLocal, engine, Base
-from app.core.security import hash_password
+from app.core.supabase import get_supabase_admin
 from app.models.user import User, UserRole
 from app.models.client import Client
 from app.models.animal import Animal, AnimalAlert, WeightRecord, Species, Sex
@@ -30,29 +30,42 @@ def seed():
 
         print("Seeding demo data...")
 
-        # ==================== USERS ====================
-        admin = User(
-            email="admin@angeallvet.fr", hashed_password=hash_password("admin123"),
-            first_name="Sophie", last_name="Martin", role=UserRole.ADMIN, phone="0601020304",
-        )
-        vet1 = User(
-            email="dr.dupont@angeallvet.fr", hashed_password=hash_password("vet123"),
-            first_name="Pierre", last_name="Dupont", role=UserRole.VETERINARIAN, phone="0605060708",
-        )
-        vet2 = User(
-            email="dr.bernard@angeallvet.fr", hashed_password=hash_password("vet123"),
-            first_name="Marie", last_name="Bernard", role=UserRole.VETERINARIAN, phone="0609101112",
-        )
-        asv = User(
-            email="asv@angeallvet.fr", hashed_password=hash_password("asv123"),
-            first_name="Julie", last_name="Petit", role=UserRole.ASSISTANT, phone="0613141516",
-        )
-        accountant = User(
-            email="compta@angeallvet.fr", hashed_password=hash_password("compta123"),
-            first_name="Marc", last_name="Lecomte", role=UserRole.ACCOUNTANT,
-        )
-        db.add_all([admin, vet1, vet2, asv, accountant])
+        # ==================== USERS (via Supabase Auth) ====================
+        supabase = get_supabase_admin()
+
+        demo_users = [
+            {"email": "admin@angeallvet.fr", "password": "admin123", "first_name": "Sophie", "last_name": "Martin", "role": UserRole.ADMIN, "phone": "0601020304"},
+            {"email": "dr.dupont@angeallvet.fr", "password": "vet123", "first_name": "Pierre", "last_name": "Dupont", "role": UserRole.VETERINARIAN, "phone": "0605060708"},
+            {"email": "dr.bernard@angeallvet.fr", "password": "vet123", "first_name": "Marie", "last_name": "Bernard", "role": UserRole.VETERINARIAN, "phone": "0609101112"},
+            {"email": "asv@angeallvet.fr", "password": "asv123", "first_name": "Julie", "last_name": "Petit", "role": UserRole.ASSISTANT, "phone": "0613141516"},
+            {"email": "compta@angeallvet.fr", "password": "compta123", "first_name": "Marc", "last_name": "Lecomte", "role": UserRole.ACCOUNTANT, "phone": None},
+        ]
+
+        user_objects = []
+        for ud in demo_users:
+            auth_response = supabase.auth.admin.create_user({
+                "email": ud["email"],
+                "password": ud["password"],
+                "email_confirm": True,
+                "user_metadata": {
+                    "first_name": ud["first_name"],
+                    "last_name": ud["last_name"],
+                    "role": ud["role"].value,
+                },
+            })
+            user = User(
+                supabase_uid=auth_response.user.id,
+                email=ud["email"],
+                first_name=ud["first_name"],
+                last_name=ud["last_name"],
+                role=ud["role"],
+                phone=ud["phone"],
+            )
+            db.add(user)
+            user_objects.append(user)
         db.flush()
+
+        admin, vet1, vet2, asv, accountant = user_objects
 
         # ==================== CLIENTS ====================
         clients_data = [

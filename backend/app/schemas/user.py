@@ -13,6 +13,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
+    """Create user: password is managed by Supabase, we just need profile info."""
     password: str
 
 
@@ -27,6 +28,7 @@ class UserUpdate(BaseModel):
 
 class UserResponse(UserBase):
     id: int
+    supabase_uid: str
     is_active: bool
     created_at: datetime
 

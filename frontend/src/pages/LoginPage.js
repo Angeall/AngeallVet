@@ -17,8 +17,8 @@ export default function LoginPage() {
       await login(email, password);
       toast.success('Connexion réussie');
       navigate('/');
-    } catch {
-      toast.error('Email ou mot de passe incorrect');
+    } catch (err) {
+      toast.error(err.message || 'Email ou mot de passe incorrect');
     } finally {
       setLoading(false);
     }

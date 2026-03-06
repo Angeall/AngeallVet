@@ -1,72 +1,61 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+security_scheme = HTTPBearer()
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (
-        expires_delta or timedelta(minutes=settings.AUTH_ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    to_encode.update({"exp": expire, "type": "access"})
-    return jwt.encode(to_encode, settings.AUTH_SECRET_KEY, algorithm=settings.AUTH_ALGORITHM)
-
-
-def create_refresh_token(data: dict) -> str:
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.AUTH_REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "type": "refresh"})
-    return jwt.encode(to_encode, settings.AUTH_SECRET_KEY, algorithm=settings.AUTH_ALGORITHM)
-
-
-def decode_token(token: str) -> dict:
+def verify_supabase_token(token: str) -> dict:
+    """Verify and decode a Supabase JWT token."""
     try:
-        payload = jwt.decode(token, settings.AUTH_SECRET_KEY, algorithms=[settings.AUTH_ALGORITHM])
+        payload = jwt.decode(
+            token,
+            settings.SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
         return payload
-    except JWTError:
+    except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token invalide ou expiré",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Token expiré",
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalide",
         )
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
+    db: Session = Depends(get_db),
+):
+    """Extract user from Supabase JWT and find corresponding local profile."""
     from app.models.user import User
 
-    payload = decode_token(token)
-    user_id = payload.get("sub")
-    if user_id is None:
-        raise HTTPException(status_code=401, detail="Token invalide")
+    payload = verify_supabase_token(credentials.credentials)
+    supabase_uid = payload.get("sub")
+    if not supabase_uid:
+        raise HTTPException(status_code=401, detail="Token invalide: sub manquant")
 
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    user = db.query(User).filter(User.supabase_uid == supabase_uid).first()
     if user is None:
-        raise HTTPException(status_code=401, detail="Utilisateur non trouvé")
+        raise HTTPException(
+            status_code=401,
+            detail="Profil utilisateur non trouvé. Contactez un administrateur.",
+        )
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé")
     return user
 
 
 def require_roles(*roles):
+    """Dependency that restricts access to specific roles."""
     def role_checker(current_user=Depends(get_current_user)):
         if current_user.role not in roles:
             raise HTTPException(

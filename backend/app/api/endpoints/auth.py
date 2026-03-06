@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from gotrue.errors import AuthApiError
 
 from app.core.database import get_db
-from app.core.security import (
-    hash_password, verify_password, create_access_token,
-    create_refresh_token, decode_token, get_current_user, require_roles,
-)
+from app.core.security import get_current_user, require_roles
+from app.core.supabase import get_supabase_admin
 from app.models.user import User, UserRole
 from app.schemas.user import (
     UserCreate, UserUpdate, UserResponse, LoginRequest, TokenResponse,
@@ -16,11 +15,28 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/register", response_model=UserResponse, status_code=201)
 def register(data: UserCreate, db: Session = Depends(get_db)):
+    """Register a new user: creates Supabase auth account + local profile."""
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email déjà utilisé")
+
+    supabase = get_supabase_admin()
+    try:
+        auth_response = supabase.auth.admin.create_user({
+            "email": data.email,
+            "password": data.password,
+            "email_confirm": True,
+            "user_metadata": {
+                "first_name": data.first_name,
+                "last_name": data.last_name,
+                "role": data.role.value,
+            },
+        })
+    except AuthApiError as e:
+        raise HTTPException(status_code=400, detail=f"Erreur Supabase: {e.message}")
+
     user = User(
+        supabase_uid=auth_response.user.id,
         email=data.email,
-        hashed_password=hash_password(data.password),
         first_name=data.first_name,
         last_name=data.last_name,
         role=data.role,
@@ -34,38 +50,56 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
-    if not user or not verify_password(data.password, user.hashed_password):
+    """Authenticate via Supabase and return tokens."""
+    supabase = get_supabase_admin()
+    try:
+        auth_response = supabase.auth.sign_in_with_password({
+            "email": data.email,
+            "password": data.password,
+        })
+    except AuthApiError:
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+
+    session = auth_response.session
+    if not session:
+        raise HTTPException(status_code=401, detail="Échec de l'authentification")
+
+    user = db.query(User).filter(User.supabase_uid == auth_response.user.id).first()
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Profil utilisateur non trouvé. Contactez un administrateur.",
+        )
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé")
 
-    access_token = create_access_token({"sub": str(user.id), "role": user.role.value})
-    refresh_token = create_refresh_token({"sub": str(user.id)})
-
     return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
+        access_token=session.access_token,
+        refresh_token=session.refresh_token,
         user=UserResponse.model_validate(user),
     )
 
 
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
-    payload = decode_token(refresh_token)
-    if payload.get("type") != "refresh":
-        raise HTTPException(status_code=401, detail="Token invalide")
+    """Refresh tokens via Supabase."""
+    supabase = get_supabase_admin()
+    try:
+        auth_response = supabase.auth.refresh_session(refresh_token)
+    except AuthApiError:
+        raise HTTPException(status_code=401, detail="Token de rafraîchissement invalide")
 
-    user = db.query(User).filter(User.id == int(payload["sub"])).first()
+    session = auth_response.session
+    if not session:
+        raise HTTPException(status_code=401, detail="Échec du rafraîchissement")
+
+    user = db.query(User).filter(User.supabase_uid == auth_response.user.id).first()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé")
 
-    new_access = create_access_token({"sub": str(user.id), "role": user.role.value})
-    new_refresh = create_refresh_token({"sub": str(user.id)})
-
     return TokenResponse(
-        access_token=new_access,
-        refresh_token=new_refresh,
+        access_token=session.access_token,
+        refresh_token=session.refresh_token,
         user=UserResponse.model_validate(user),
     )
 
@@ -94,7 +128,20 @@ def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
 
-    for field, value in data.model_dump(exclude_unset=True).items():
+    update_data = data.model_dump(exclude_unset=True)
+
+    # Sync email change to Supabase
+    if "email" in update_data and update_data["email"] != user.email:
+        supabase = get_supabase_admin()
+        try:
+            supabase.auth.admin.update_user_by_id(
+                user.supabase_uid,
+                {"email": update_data["email"]},
+            )
+        except AuthApiError as e:
+            raise HTTPException(status_code=400, detail=f"Erreur Supabase: {e.message}")
+
+    for field, value in update_data.items():
         setattr(user, field, value)
 
     db.commit()

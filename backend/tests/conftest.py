@@ -1,17 +1,23 @@
+import uuid
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
+
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.core.database import Base, get_db
-from app.core.security import hash_password
 from app.main import app
 from app.models.user import User, UserRole
 
 
 # In-memory SQLite for testing
 SQLALCHEMY_DATABASE_URL = "sqlite://"
+TEST_JWT_SECRET = "test-supabase-jwt-secret"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
@@ -21,11 +27,30 @@ engine = create_engine(
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def _create_test_token(supabase_uid: str) -> str:
+    """Create a fake Supabase-style JWT for testing."""
+    payload = {
+        "sub": supabase_uid,
+        "aud": "authenticated",
+        "role": "authenticated",
+        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        "iat": datetime.now(timezone.utc),
+    }
+    return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
+
+
 @pytest.fixture(autouse=True)
 def setup_db():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def mock_supabase_jwt_secret():
+    """Override the Supabase JWT secret for testing."""
+    with patch.object(settings, "SUPABASE_JWT_SECRET", TEST_JWT_SECRET):
+        yield
 
 
 @pytest.fixture
@@ -53,9 +78,10 @@ def client(db):
 
 @pytest.fixture
 def admin_user(db):
+    uid = str(uuid.uuid4())
     user = User(
+        supabase_uid=uid,
         email="admin@test.com",
-        hashed_password=hash_password("admin123"),
         first_name="Admin",
         last_name="Test",
         role=UserRole.ADMIN,
@@ -69,9 +95,10 @@ def admin_user(db):
 
 @pytest.fixture
 def vet_user(db):
+    uid = str(uuid.uuid4())
     user = User(
+        supabase_uid=uid,
         email="vet@test.com",
-        hashed_password=hash_password("vet123"),
         first_name="Dr",
         last_name="Vet",
         role=UserRole.VETERINARIAN,
@@ -84,21 +111,13 @@ def vet_user(db):
 
 
 @pytest.fixture
-def admin_token(client, admin_user):
-    response = client.post("/api/v1/auth/login", json={
-        "email": "admin@test.com",
-        "password": "admin123",
-    })
-    return response.json()["access_token"]
+def admin_token(admin_user):
+    return _create_test_token(admin_user.supabase_uid)
 
 
 @pytest.fixture
-def vet_token(client, vet_user):
-    response = client.post("/api/v1/auth/login", json={
-        "email": "vet@test.com",
-        "password": "vet123",
-    })
-    return response.json()["access_token"]
+def vet_token(vet_user):
+    return _create_test_token(vet_user.supabase_uid)
 
 
 @pytest.fixture

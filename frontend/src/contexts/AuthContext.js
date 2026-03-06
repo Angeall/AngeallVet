@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../services/supabase';
 import { authAPI } from '../services/api';
 
 const AuthContext = createContext(null);
@@ -8,31 +9,53 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      authAPI.me()
-        .then((res) => setUser(res.data))
-        .catch(() => {
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    // Check for existing Supabase session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        // Fetch the local user profile from our backend
+        authAPI.me()
+          .then((res) => setUser(res.data))
+          .catch(() => {
+            supabase.auth.signOut();
+          })
+          .finally(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // Listen for auth state changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          setUser(null);
+        } else if (event === 'TOKEN_REFRESHED' && session) {
+          // Session refreshed automatically by Supabase
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email, password) => {
-    const res = await authAPI.login({ email, password });
-    localStorage.setItem('access_token', res.data.access_token);
-    localStorage.setItem('refresh_token', res.data.refresh_token);
-    setUser(res.data.user);
-    return res.data;
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    // Fetch local user profile from our backend
+    const profileRes = await authAPI.me();
+    setUser(profileRes.data);
+    return profileRes.data;
   };
 
-  const logout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
   };
 
