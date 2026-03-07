@@ -19,6 +19,8 @@ export default function AnimalDetailPage() {
     record_type: 'consultation', subjective: '', objective: '', assessment: '', plan: '', notes: '',
   });
   const [hospForm, setHospForm] = useState({ reason: '', cage_number: '' });
+  const [showAlertForm, setShowAlertForm] = useState(false);
+  const [alertForm, setAlertForm] = useState({ alert_type: 'allergy', message: '', severity: 'warning' });
 
   const load = async () => {
     try {
@@ -112,7 +114,36 @@ export default function AnimalDetailPage() {
     }
   };
 
+  const handleAlertSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await animalsAPI.addAlert(id, alertForm);
+      toast.success('Alerte ajoutee');
+      setShowAlertForm(false);
+      setAlertForm({ alert_type: 'allergy', message: '', severity: 'warning' });
+      load();
+    } catch {
+      toast.error('Erreur');
+    }
+  };
+
+  const removeAlert = async (alertId) => {
+    try {
+      await animalsAPI.removeAlert(id, alertId);
+      toast.success('Alerte supprimee');
+      load();
+    } catch {
+      toast.error('Erreur');
+    }
+  };
+
   if (!animal) return <div className="page-content">Chargement...</div>;
+
+  const alertTypeLabels = {
+    allergy: 'Allergie', aggressive: 'Agressif', chronic: 'Maladie chronique',
+    medication: 'Medicament', other: 'Autre',
+  };
+  const severityLabels = { danger: 'Danger', warning: 'Attention', info: 'Information' };
 
   const weightChartData = [...weights].reverse().map((w) => ({
     date: new Date(w.recorded_at).toLocaleDateString('fr-FR'),
@@ -173,12 +204,64 @@ export default function AnimalDetailPage() {
       )}
 
       {/* Alerts */}
-      {animal.alerts?.filter((a) => a.is_active).map((alert) => (
-        <div key={alert.id} className={`alert-banner ${alert.severity}`}>
-          {alert.severity === 'danger' ? '!!!' : alert.severity === 'warning' ? '!' : 'i'}
-          {' '}<strong>{alert.alert_type}:</strong> {alert.message}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title">Alertes</h3>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowAlertForm(!showAlertForm)}>+ Ajouter une alerte</button>
         </div>
-      ))}
+
+        {showAlertForm && (
+          <div style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+            <form onSubmit={handleAlertSubmit}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Type *</label>
+                  <select className="form-select" value={alertForm.alert_type} onChange={(e) => setAlertForm({ ...alertForm, alert_type: e.target.value })}>
+                    {Object.entries(alertTypeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Severite</label>
+                  <select className="form-select" value={alertForm.severity} onChange={(e) => setAlertForm({ ...alertForm, severity: e.target.value })}>
+                    {Object.entries(severityLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Message *</label>
+                <input className="form-input" value={alertForm.message} onChange={(e) => setAlertForm({ ...alertForm, message: e.target.value })} placeholder="Ex: Allergique a la penicilline" required />
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="submit" className="btn btn-primary">Ajouter</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAlertForm(false)}>Annuler</button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {animal.alerts?.filter((a) => a.is_active).length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {animal.alerts.filter((a) => a.is_active).map((alert) => (
+              <div key={alert.id} className={`alert-banner ${alert.severity}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 0 }}>
+                <span>
+                  {alert.severity === 'danger' ? '!!!' : alert.severity === 'warning' ? '!' : 'i'}
+                  {' '}<strong>{alertTypeLabels[alert.alert_type] || alert.alert_type}:</strong> {alert.message}
+                </span>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => removeAlert(alert.id)}
+                  style={{ background: 'rgba(255,255,255,0.3)', border: 'none', cursor: 'pointer', padding: '2px 8px', borderRadius: '4px' }}
+                  title="Supprimer cette alerte"
+                >
+                  X
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={{ color: 'var(--gray-400)', textAlign: 'center', margin: '8px 0' }}>Aucune alerte active</p>
+        )}
+      </div>
 
       {/* Info card */}
       <div className="card">
