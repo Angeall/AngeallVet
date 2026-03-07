@@ -17,11 +17,14 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Handle 401 by signing out
+// Handle 401 – sign out only for non-auth endpoints to avoid
+// destroying a valid Supabase session during the login flow.
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    const url = error.config?.url || '';
+    const isAuthEndpoint = url.includes('/auth/');
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       await supabase.auth.signOut();
       window.location.href = '/login';
     }

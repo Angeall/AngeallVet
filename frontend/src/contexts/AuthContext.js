@@ -15,8 +15,14 @@ export function AuthProvider({ children }) {
         // Fetch the local user profile from our backend
         authAPI.me()
           .then((res) => setUser(res.data))
-          .catch(() => {
-            supabase.auth.signOut();
+          .catch((err) => {
+            console.warn('Session exists but /auth/me failed:', err.response?.data?.detail || err.message);
+            // Only sign out if the token is truly invalid (expired, malformed).
+            // A missing local profile (auto-provisioning failure) should not
+            // destroy the Supabase session – the user can retry via login.
+            if (err.response?.status === 401) {
+              supabase.auth.signOut();
+            }
           })
           .finally(() => setLoading(false));
       } else {
@@ -48,8 +54,27 @@ export function AuthProvider({ children }) {
       throw new Error(error.message);
     }
 
-    // Fetch local user profile from our backend
-    const profileRes = await authAPI.me();
+    // Fetch local user profile from our backend.
+    // The backend auto-provisions the profile on first login, which may
+    // need a moment, so we retry once after a short delay if it fails.
+    let profileRes;
+    try {
+      profileRes = await authAPI.me();
+    } catch (firstErr) {
+      // Wait briefly then retry – gives auto-provisioning time to complete
+      await new Promise((r) => setTimeout(r, 1000));
+      try {
+        profileRes = await authAPI.me();
+      } catch (secondErr) {
+        // Don't destroy the Supabase session – let the user retry or
+        // see a meaningful error instead of a silent logout loop.
+        throw new Error(
+          secondErr.response?.data?.detail ||
+            'Impossible de charger votre profil. Vérifiez la configuration du serveur.'
+        );
+      }
+    }
+
     setUser(profileRes.data);
     return profileRes.data;
   };
