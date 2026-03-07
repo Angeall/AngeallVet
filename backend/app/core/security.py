@@ -14,6 +14,12 @@ security_scheme = HTTPBearer()
 
 def verify_supabase_token(token: str) -> dict:
     """Verify and decode a Supabase JWT token."""
+    if not settings.SUPABASE_JWT_SECRET:
+        logger.error("SUPABASE_JWT_SECRET is not configured – all tokens will be rejected")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Configuration serveur incomplète (JWT secret manquant)",
+        )
     try:
         payload = jwt.decode(
             token,
@@ -27,7 +33,8 @@ def verify_supabase_token(token: str) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expiré",
         )
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        logger.warning("JWT verification failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token invalide",

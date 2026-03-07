@@ -1,9 +1,13 @@
+import logging
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 from app.core.database import engine, Base
 from app.api.endpoints import (
     auth, clients, animals, appointments,
@@ -48,6 +52,21 @@ app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+
+    # Warn loudly about missing Supabase configuration
+    missing = []
+    if not settings.SUPABASE_URL:
+        missing.append("SUPABASE_URL")
+    if not settings.SUPABASE_JWT_SECRET:
+        missing.append("SUPABASE_JWT_SECRET")
+    if not settings.SUPABASE_SERVICE_ROLE_KEY:
+        missing.append("SUPABASE_SERVICE_ROLE_KEY")
+    if missing:
+        logger.warning(
+            "⚠ CONFIGURATION INCOMPLÈTE – Variables manquantes : %s. "
+            "L'authentification ne fonctionnera PAS.",
+            ", ".join(missing),
+        )
 
 
 @app.get("/api/health")
