@@ -58,6 +58,7 @@ class MedicalRecordBase(BaseModel):
     objective: Optional[str] = None
     assessment: Optional[str] = None
     plan: Optional[str] = None
+    home_treatment: Optional[str] = None
     notes: Optional[str] = None
     template_id: Optional[int] = None
     appointment_id: Optional[int] = None

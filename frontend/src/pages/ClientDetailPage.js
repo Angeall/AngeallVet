@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { clientsAPI, animalsAPI, billingAPI, communicationsAPI } from '../services/api';
+import { clientsAPI, animalsAPI, billingAPI, communicationsAPI, inventoryAPI } from '../services/api';
 import toast from 'react-hot-toast';
+
+const defaultPrices = [
+  { label: 'Consultation', price: 40, vat: 20 },
+  { label: 'Vaccination', price: 55, vat: 20 },
+  { label: 'Detartrage', price: 120, vat: 20 },
+  { label: 'Sterilisation chien', price: 250, vat: 20 },
+  { label: 'Sterilisation chat', price: 150, vat: 20 },
+  { label: 'Analyse sanguine', price: 65, vat: 20 },
+  { label: 'Radiographie', price: 80, vat: 20 },
+  { label: 'Echographie', price: 90, vat: 20 },
+];
 
 export default function ClientDetailPage() {
   const { id } = useParams();
@@ -15,6 +26,12 @@ export default function ClientDetailPage() {
     name: '', species: 'dog', breed: '', sex: 'male',
     date_of_birth: '', color: '', microchip_number: '', tattoo_number: '', is_neutered: false,
   });
+
+  // Quick invoice state
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+  const [invoiceLines, setInvoiceLines] = useState([]);
+  const [invoiceAnimalId, setInvoiceAnimalId] = useState('');
+  const [products, setProducts] = useState([]);
 
   const load = async () => {
     try {
@@ -35,6 +52,12 @@ export default function ClientDetailPage() {
 
   useEffect(() => { load(); }, [id]);
 
+  useEffect(() => {
+    if (showInvoiceForm && products.length === 0) {
+      inventoryAPI.listProducts({ limit: 200 }).then(res => setProducts(res.data || [])).catch(() => {});
+    }
+  }, [showInvoiceForm]);
+
   const handleAnimalSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -54,6 +77,48 @@ export default function ClientDetailPage() {
     }
   };
 
+  const addDefaultLine = (item) => {
+    setInvoiceLines([...invoiceLines, { description: item.label, quantity: 1, unit_price: item.price, vat_rate: item.vat }]);
+  };
+
+  const addProductLine = (product) => {
+    setInvoiceLines([...invoiceLines, {
+      description: product.name, quantity: 1,
+      unit_price: parseFloat(product.selling_price || 0), vat_rate: parseFloat(product.vat_rate || 20),
+    }]);
+  };
+
+  const removeInvoiceLine = (idx) => {
+    setInvoiceLines(invoiceLines.filter((_, i) => i !== idx));
+  };
+
+  const updateInvoiceLine = (idx, field, value) => {
+    const updated = [...invoiceLines];
+    updated[idx] = { ...updated[idx], [field]: value };
+    setInvoiceLines(updated);
+  };
+
+  const invoiceTotal = invoiceLines.reduce((sum, l) => sum + (parseFloat(l.quantity) || 0) * (parseFloat(l.unit_price) || 0), 0);
+
+  const submitInvoice = async () => {
+    if (invoiceLines.length === 0) { toast.error('Ajoutez au moins une ligne'); return; }
+    try {
+      await billingAPI.createInvoice({
+        client_id: parseInt(id),
+        animal_id: invoiceAnimalId ? parseInt(invoiceAnimalId) : null,
+        lines: invoiceLines.map(l => ({
+          description: l.description, quantity: parseFloat(l.quantity),
+          unit_price: parseFloat(l.unit_price), vat_rate: parseFloat(l.vat_rate),
+        })),
+      });
+      toast.success('Facture creee');
+      setShowInvoiceForm(false);
+      setInvoiceLines([]);
+      setInvoiceAnimalId('');
+      load();
+    } catch { toast.error('Erreur lors de la creation'); }
+  };
+
   if (!client) return <div className="page-content">Chargement...</div>;
 
   return (
@@ -62,6 +127,11 @@ export default function ClientDetailPage() {
         <div className="page-header-left">
           <Link to="/clients" className="breadcrumb-link">Clients /</Link>
           <h1 className="page-title">{client.last_name} {client.first_name}</h1>
+        </div>
+        <div className="page-header-actions">
+          <button className="btn btn-primary" onClick={() => { setShowInvoiceForm(!showInvoiceForm); setTab('invoices'); }}>
+            + Facturation rapide
+          </button>
         </div>
       </div>
 
@@ -195,6 +265,67 @@ export default function ClientDetailPage() {
 
       {tab === 'invoices' && (
         <div className="card">
+          {showInvoiceForm && (
+            <div style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+              <h4 style={{ marginBottom: '12px' }}>Facturation rapide</h4>
+
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label className="form-label">Animal (optionnel)</label>
+                <select className="form-select" value={invoiceAnimalId} onChange={(e) => setInvoiceAnimalId(e.target.value)}>
+                  <option value="">-- Aucun --</option>
+                  {animals.map(a => <option key={a.id} value={a.id}>{a.name} ({a.species})</option>)}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+                {defaultPrices.map((item, i) => (
+                  <button key={i} type="button" className="btn btn-secondary btn-sm" onClick={() => addDefaultLine(item)}>
+                    {item.label} ({item.price} EUR)
+                  </button>
+                ))}
+              </div>
+
+              {products.length > 0 && (
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <label className="form-label">Ajouter un produit</label>
+                  <select className="form-select" value="" onChange={(e) => {
+                    const p = products.find(p => p.id === parseInt(e.target.value));
+                    if (p) addProductLine(p);
+                  }}>
+                    <option value="">-- Choisir un produit --</option>
+                    {products.map(p => <option key={p.id} value={p.id}>{p.name} ({parseFloat(p.selling_price || 0).toFixed(2)} EUR)</option>)}
+                  </select>
+                </div>
+              )}
+
+              {invoiceLines.length > 0 && (
+                <table style={{ marginBottom: '12px' }}>
+                  <thead><tr><th>Description</th><th>Qte</th><th>Prix HT</th><th>TVA %</th><th>Total</th><th></th></tr></thead>
+                  <tbody>
+                    {invoiceLines.map((line, idx) => (
+                      <tr key={idx}>
+                        <td><input className="form-input" value={line.description} onChange={(e) => updateInvoiceLine(idx, 'description', e.target.value)} style={{ minWidth: '150px' }} /></td>
+                        <td><input type="number" className="form-input" value={line.quantity} onChange={(e) => updateInvoiceLine(idx, 'quantity', e.target.value)} style={{ width: '60px' }} min="1" /></td>
+                        <td><input type="number" className="form-input" value={line.unit_price} onChange={(e) => updateInvoiceLine(idx, 'unit_price', e.target.value)} style={{ width: '80px' }} step="0.01" /></td>
+                        <td><input type="number" className="form-input" value={line.vat_rate} onChange={(e) => updateInvoiceLine(idx, 'vat_rate', e.target.value)} style={{ width: '60px' }} /></td>
+                        <td style={{ fontWeight: 600 }}>{((parseFloat(line.quantity) || 0) * (parseFloat(line.unit_price) || 0)).toFixed(2)}</td>
+                        <td><button className="btn btn-secondary btn-sm" onClick={() => removeInvoiceLine(idx)} style={{ color: 'red' }}>X</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr><td colSpan="4" style={{ textAlign: 'right', fontWeight: 700 }}>Total HT:</td><td style={{ fontWeight: 700 }}>{invoiceTotal.toFixed(2)} EUR</td><td></td></tr>
+                  </tfoot>
+                </table>
+              )}
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn btn-primary" onClick={submitInvoice}>Creer la facture</button>
+                <button className="btn btn-secondary" onClick={() => { setShowInvoiceForm(false); setInvoiceLines([]); }}>Annuler</button>
+              </div>
+            </div>
+          )}
+
           <table>
             <thead><tr><th>N</th><th>Date</th><th>Total</th><th>Statut</th></tr></thead>
             <tbody>

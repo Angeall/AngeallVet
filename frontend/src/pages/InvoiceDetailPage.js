@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { billingAPI } from '../services/api';
+import { billingAPI, clientsAPI, animalsAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 const statusLabels = {
@@ -15,12 +15,28 @@ const statusColors = {
 export default function InvoiceDetailPage() {
   const { id } = useParams();
   const [invoice, setInvoice] = useState(null);
+  const [clientName, setClientName] = useState('');
+  const [animalName, setAnimalName] = useState('');
 
   useEffect(() => {
     async function load() {
       try {
         const res = await billingAPI.getInvoice(id);
-        setInvoice(res.data);
+        const inv = res.data;
+        setInvoice(inv);
+
+        if (inv.client_id) {
+          try {
+            const cRes = await clientsAPI.get(inv.client_id);
+            setClientName(`${cRes.data.last_name} ${cRes.data.first_name}`);
+          } catch {}
+        }
+        if (inv.animal_id) {
+          try {
+            const aRes = await animalsAPI.get(inv.animal_id);
+            setAnimalName(aRes.data.name);
+          } catch {}
+        }
       } catch {
         toast.error('Erreur de chargement');
       }
@@ -70,8 +86,18 @@ export default function InvoiceDetailPage() {
         <div className="form-row">
           <div><strong>Date d'emission:</strong> {invoice.issue_date}</div>
           <div><strong>Date d'echeance:</strong> {invoice.due_date || '-'}</div>
-          <div><strong>Client ID:</strong> {invoice.client_id}</div>
-          <div><strong>Animal ID:</strong> {invoice.animal_id || '-'}</div>
+          <div>
+            <strong>Client:</strong>{' '}
+            {invoice.client_id ? (
+              <Link to={`/clients/${invoice.client_id}`} className="table-link">{clientName || `#${invoice.client_id}`}</Link>
+            ) : '-'}
+          </div>
+          <div>
+            <strong>Animal:</strong>{' '}
+            {invoice.animal_id ? (
+              <Link to={`/animals/${invoice.animal_id}`} className="table-link">{animalName || `#${invoice.animal_id}`}</Link>
+            ) : '-'}
+          </div>
         </div>
         {invoice.notes && (
           <div style={{ marginTop: '12px' }}>

@@ -57,14 +57,18 @@ export default function HospitalizationPage() {
             <div className="card-header">
               <div>
                 <h3 className="card-title">
-                  <Link to={`/animals/${h.animal_id}`} className="table-link">Animal #{h.animal_id}</Link>
-                  {' '}- Cage {h.cage_number || 'N/A'}
+                  <Link to={`/hospitalization/${h.id}`} className="table-link">
+                    Animal #{h.animal_id} - Cage {h.cage_number || 'N/A'}
+                  </Link>
                 </h3>
                 <span className={`badge badge-${h.status === 'active' ? 'green' : 'gray'}`}>{h.status}</span>
               </div>
-              {h.status === 'active' && (
-                <button className="btn btn-secondary btn-sm" onClick={() => discharge(h.id)}>Sortie</button>
-              )}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Link to={`/hospitalization/${h.id}`} className="btn btn-primary btn-sm">Voir detail</Link>
+                {h.status === 'active' && (
+                  <button className="btn btn-secondary btn-sm" onClick={() => discharge(h.id)}>Sortie</button>
+                )}
+              </div>
             </div>
             <p><strong>Motif:</strong> {h.reason}</p>
             <p style={{ fontSize: '0.85rem', color: 'var(--gray-500)' }}>

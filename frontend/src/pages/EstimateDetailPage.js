@@ -1,17 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { billingAPI } from '../services/api';
+import { billingAPI, clientsAPI, animalsAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function EstimateDetailPage() {
   const { id } = useParams();
   const [estimate, setEstimate] = useState(null);
+  const [clientName, setClientName] = useState('');
+  const [animalName, setAnimalName] = useState('');
 
   useEffect(() => {
     async function load() {
       try {
         const res = await billingAPI.getEstimate(id);
-        setEstimate(res.data);
+        const est = res.data;
+        setEstimate(est);
+
+        if (est.client_id) {
+          try {
+            const cRes = await clientsAPI.get(est.client_id);
+            setClientName(`${cRes.data.last_name} ${cRes.data.first_name}`);
+          } catch {}
+        }
+        if (est.animal_id) {
+          try {
+            const aRes = await animalsAPI.get(est.animal_id);
+            setAnimalName(aRes.data.name);
+          } catch {}
+        }
       } catch {
         toast.error('Erreur de chargement');
       }
@@ -71,8 +87,18 @@ export default function EstimateDetailPage() {
         <div className="form-row">
           <div><strong>Date d'emission:</strong> {estimate.issue_date}</div>
           <div><strong>Valide jusqu'au:</strong> {estimate.valid_until || '-'}</div>
-          <div><strong>Client ID:</strong> {estimate.client_id}</div>
-          <div><strong>Animal ID:</strong> {estimate.animal_id || '-'}</div>
+          <div>
+            <strong>Client:</strong>{' '}
+            {estimate.client_id ? (
+              <Link to={`/clients/${estimate.client_id}`} className="table-link">{clientName || `#${estimate.client_id}`}</Link>
+            ) : '-'}
+          </div>
+          <div>
+            <strong>Animal:</strong>{' '}
+            {estimate.animal_id ? (
+              <Link to={`/animals/${estimate.animal_id}`} className="table-link">{animalName || `#${estimate.animal_id}`}</Link>
+            ) : '-'}
+          </div>
         </div>
         {estimate.notes && (
           <div style={{ marginTop: '12px' }}>

@@ -20,6 +20,8 @@ import EstimatesPage from './pages/EstimatesPage';
 import EstimateDetailPage from './pages/EstimateDetailPage';
 import CommunicationsPage from './pages/CommunicationsPage';
 import HospitalizationPage from './pages/HospitalizationPage';
+import HospitalizationDetailPage from './pages/HospitalizationDetailPage';
+import SalesPage from './pages/SalesPage';
 import UsersPage from './pages/UsersPage';
 
 function PrivateRoute({ children }) {
@@ -56,6 +58,8 @@ function App() {
                   <Route path="/estimates/:id" element={<EstimateDetailPage />} />
                   <Route path="/communications" element={<CommunicationsPage />} />
                   <Route path="/hospitalization" element={<HospitalizationPage />} />
+                  <Route path="/hospitalization/:id" element={<HospitalizationDetailPage />} />
+                  <Route path="/sales" element={<SalesPage />} />
                   <Route path="/users" element={<UsersPage />} />
                 </Routes>
               </Layout>

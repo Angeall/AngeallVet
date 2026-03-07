@@ -31,6 +31,7 @@ class MedicalRecord(Base):
     objective = Column(Text)   # Examen clinique
     assessment = Column(Text)  # Diagnostic
     plan = Column(Text)        # Plan de traitement
+    home_treatment = Column(Text)  # Traitement à la maison
     notes = Column(Text)
     template_id = Column(Integer, ForeignKey("consultation_templates.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

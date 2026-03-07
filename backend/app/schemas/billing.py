@@ -64,6 +64,14 @@ class EstimateLineCreate(BaseModel):
     vat_rate: Decimal = Decimal("20.00")
 
 
+class EstimateLineResponse(EstimateLineCreate):
+    id: int
+    line_total: Optional[Decimal] = None
+
+    class Config:
+        from_attributes = True
+
+
 class EstimateCreate(BaseModel):
     client_id: int
     animal_id: Optional[int] = None
@@ -84,6 +92,7 @@ class EstimateResponse(BaseModel):
     total_vat: Decimal
     total: Decimal
     notes: Optional[str] = None
+    lines: List[EstimateLineResponse] = []
     created_at: datetime
 
     class Config:
