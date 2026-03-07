@@ -51,7 +51,21 @@ app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
 
 @app.on_event("startup")
 def on_startup():
+    # Create tables that don't exist yet
     Base.metadata.create_all(bind=engine)
+
+    # Run Alembic migrations for schema changes on existing tables
+    from alembic.config import Config
+    from alembic import command
+
+    alembic_ini = os.path.join(os.path.dirname(os.path.dirname(__file__)), "alembic.ini")
+    if os.path.exists(alembic_ini):
+        alembic_cfg = Config(alembic_ini)
+        try:
+            command.upgrade(alembic_cfg, "head")
+            logger.info("Database migrations applied successfully")
+        except Exception as e:
+            logger.warning("Migration warning: %s", e)
 
     # Warn loudly about missing Supabase configuration
     missing = []
