@@ -30,6 +30,8 @@ class Product(Base):
     vat_rate = Column(Numeric(4, 2), default=20.00)  # TVA %
     stock_quantity = Column(Numeric(10, 2), default=0)
     stock_alert_threshold = Column(Numeric(10, 2), default=5)
+    ean13 = Column(String(13))
+    notes = Column(Text)
     requires_prescription = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     supplier_id = Column(Integer, ForeignKey("suppliers.id"))

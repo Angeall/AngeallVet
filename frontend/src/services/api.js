@@ -89,6 +89,7 @@ export const medicalAPI = {
 // Inventory
 export const inventoryAPI = {
   listProducts: (params) => api.get('/inventory/products', { params }),
+  getProduct: (id) => api.get(`/inventory/products/${id}`),
   createProduct: (data) => api.post('/inventory/products', data),
   updateProduct: (id, data) => api.put(`/inventory/products/${id}`, data),
   addLot: (productId, data) => api.post(`/inventory/products/${productId}/lots`, data),
@@ -108,6 +109,7 @@ export const billingAPI = {
   listUnpaid: () => api.get('/billing/unpaid'),
   recordPayment: (data) => api.post('/billing/payments', data),
   listEstimates: (params) => api.get('/billing/estimates', { params }),
+  getEstimate: (id) => api.get(`/billing/estimates/${id}`),
   createEstimate: (data) => api.post('/billing/estimates', data),
   convertEstimateToInvoice: (data) => api.post('/billing/estimates/to-invoice', data),
 };

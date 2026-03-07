@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { inventoryAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -6,11 +7,10 @@ export default function InventoryPage() {
   const [products, setProducts] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState('products');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     name: '', product_type: 'medication', selling_price: '', purchase_price: '',
-    vat_rate: '20.00', unit: '', stock_alert_threshold: '5',
+    vat_rate: '20.00', unit: '', stock_alert_threshold: '5', ean13: '',
   });
 
   const load = useCallback(async () => {
@@ -37,8 +37,9 @@ export default function InventoryPage() {
         purchase_price: form.purchase_price ? parseFloat(form.purchase_price) : null,
         vat_rate: parseFloat(form.vat_rate),
         stock_alert_threshold: parseFloat(form.stock_alert_threshold),
+        ean13: form.ean13 || null,
       });
-      toast.success('Produit créé');
+      toast.success('Produit cree');
       setShowForm(false);
       load();
     } catch {
@@ -46,7 +47,7 @@ export default function InventoryPage() {
     }
   };
 
-  const typeLabels = { medication: 'Médicament', food: 'Alimentation', supply: 'Fourniture', service: 'Acte médical' };
+  const typeLabels = { medication: 'Medicament', food: 'Alimentation', supply: 'Fourniture', service: 'Acte medical' };
 
   return (
     <div>
@@ -62,7 +63,7 @@ export default function InventoryPage() {
 
       {alerts.length > 0 && (
         <div className="alert-banner warning" style={{ marginBottom: '16px' }}>
-          ⚡ {alerts.length} produit(s) en stock bas
+          ! {alerts.length} produit(s) en stock bas
         </div>
       )}
 
@@ -82,8 +83,8 @@ export default function InventoryPage() {
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Unité</label>
-                <input className="form-input" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="comprimé, ml, kg..." />
+                <label className="form-label">Unite</label>
+                <input className="form-input" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="comprime, ml, kg..." />
               </div>
             </div>
             <div className="form-row">
@@ -98,6 +99,16 @@ export default function InventoryPage() {
               <div className="form-group">
                 <label className="form-label">TVA %</label>
                 <input type="number" step="0.01" className="form-input" value={form.vat_rate} onChange={(e) => setForm({ ...form, vat_rate: e.target.value })} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Code EAN13</label>
+                <input className="form-input" value={form.ean13} onChange={(e) => setForm({ ...form, ean13: e.target.value })} placeholder="13 chiffres" maxLength={13} style={{ fontFamily: 'monospace' }} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Seuil alerte stock</label>
+                <input type="number" className="form-input" value={form.stock_alert_threshold} onChange={(e) => setForm({ ...form, stock_alert_threshold: e.target.value })} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -116,9 +127,10 @@ export default function InventoryPage() {
           <table>
             <thead>
               <tr>
-                <th>Référence</th>
+                <th>Reference</th>
                 <th>Nom</th>
                 <th>Type</th>
+                <th>EAN13</th>
                 <th>Prix vente</th>
                 <th>TVA</th>
                 <th>Stock</th>
@@ -129,8 +141,11 @@ export default function InventoryPage() {
               {products.map((p) => (
                 <tr key={p.id}>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{p.reference}</td>
-                  <td style={{ fontWeight: 500 }}>{p.name}</td>
+                  <td style={{ fontWeight: 500 }}>
+                    <Link to={`/inventory/${p.id}`} className="table-link">{p.name}</Link>
+                  </td>
                   <td><span className="badge badge-blue">{typeLabels[p.product_type]}</span></td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{p.ean13 || '-'}</td>
                   <td>{parseFloat(p.selling_price).toFixed(2)} EUR</td>
                   <td>{parseFloat(p.vat_rate).toFixed(0)}%</td>
                   <td>
@@ -142,7 +157,7 @@ export default function InventoryPage() {
                 </tr>
               ))}
               {products.length === 0 && (
-                <tr><td colSpan="7" className="table-empty">Aucun produit trouvé</td></tr>
+                <tr><td colSpan="8" className="table-empty">Aucun produit trouve</td></tr>
               )}
             </tbody>
           </table>

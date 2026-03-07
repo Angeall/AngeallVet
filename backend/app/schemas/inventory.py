@@ -54,6 +54,8 @@ class ProductBase(BaseModel):
     selling_price: Decimal
     vat_rate: Decimal = Decimal("20.00")
     stock_alert_threshold: Decimal = Decimal("5")
+    ean13: Optional[str] = None
+    notes: Optional[str] = None
     requires_prescription: bool = False
     supplier_id: Optional[int] = None
 
@@ -65,6 +67,8 @@ class ProductCreate(ProductBase):
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    ean13: Optional[str] = None
+    notes: Optional[str] = None
     unit: Optional[str] = None
     purchase_price: Optional[Decimal] = None
     selling_price: Optional[Decimal] = None

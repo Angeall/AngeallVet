@@ -13,8 +13,11 @@ import AgendaPage from './pages/AgendaPage';
 import WaitingRoomPage from './pages/WaitingRoomPage';
 import MedicalRecordsPage from './pages/MedicalRecordsPage';
 import InventoryPage from './pages/InventoryPage';
+import ProductDetailPage from './pages/ProductDetailPage';
 import InvoicesPage from './pages/InvoicesPage';
+import InvoiceDetailPage from './pages/InvoiceDetailPage';
 import EstimatesPage from './pages/EstimatesPage';
+import EstimateDetailPage from './pages/EstimateDetailPage';
 import CommunicationsPage from './pages/CommunicationsPage';
 import HospitalizationPage from './pages/HospitalizationPage';
 import UsersPage from './pages/UsersPage';
@@ -46,8 +49,11 @@ function App() {
                   <Route path="/waiting-room" element={<WaitingRoomPage />} />
                   <Route path="/medical" element={<MedicalRecordsPage />} />
                   <Route path="/inventory" element={<InventoryPage />} />
+                  <Route path="/inventory/:id" element={<ProductDetailPage />} />
                   <Route path="/invoices" element={<InvoicesPage />} />
+                  <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
                   <Route path="/estimates" element={<EstimatesPage />} />
+                  <Route path="/estimates/:id" element={<EstimateDetailPage />} />
                   <Route path="/communications" element={<CommunicationsPage />} />
                   <Route path="/hospitalization" element={<HospitalizationPage />} />
                   <Route path="/users" element={<UsersPage />} />

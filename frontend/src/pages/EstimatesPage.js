@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { billingAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -44,7 +45,7 @@ export default function EstimatesPage() {
           vat_rate: parseFloat(l.vat_rate),
         })),
       });
-      toast.success('Devis créé');
+      toast.success('Devis cree');
       setShowForm(false);
       load();
     } catch {
@@ -90,14 +91,14 @@ export default function EstimatesPage() {
             {form.lines.map((line, idx) => (
               <div className="line-item-row" key={idx}>
                 <div className="form-group"><input className="form-input" placeholder="Description" value={line.description} onChange={(e) => updateLine(idx, 'description', e.target.value)} required /></div>
-                <div className="form-group" style={{ maxWidth: '100px' }}><input type="number" className="form-input" placeholder="Qté" value={line.quantity} onChange={(e) => updateLine(idx, 'quantity', e.target.value)} /></div>
+                <div className="form-group" style={{ maxWidth: '100px' }}><input type="number" className="form-input" placeholder="Qte" value={line.quantity} onChange={(e) => updateLine(idx, 'quantity', e.target.value)} /></div>
                 <div className="form-group" style={{ maxWidth: '120px' }}><input type="number" step="0.01" className="form-input" placeholder="Prix HT" value={line.unit_price} onChange={(e) => updateLine(idx, 'unit_price', e.target.value)} required /></div>
                 <div className="form-group" style={{ maxWidth: '80px' }}><input type="number" className="form-input" placeholder="TVA%" value={line.vat_rate} onChange={(e) => updateLine(idx, 'vat_rate', e.target.value)} /></div>
               </div>
             ))}
             <button type="button" className="btn btn-secondary btn-sm" onClick={addLine} style={{ marginBottom: '16px' }}>+ Ligne</button>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button type="submit" className="btn btn-primary">Créer le devis</button>
+              <button type="submit" className="btn btn-primary">Creer le devis</button>
               <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button>
             </div>
           </form>
@@ -111,7 +112,9 @@ export default function EstimatesPage() {
             <tbody>
               {estimates.map((est) => (
                 <tr key={est.id}>
-                  <td style={{ fontFamily: 'monospace' }}>{est.estimate_number}</td>
+                  <td style={{ fontFamily: 'monospace' }}>
+                    <Link to={`/estimates/${est.id}`} className="table-link">{est.estimate_number}</Link>
+                  </td>
                   <td>{est.issue_date}</td>
                   <td>{est.client_id}</td>
                   <td style={{ fontWeight: 600 }}>{parseFloat(est.total).toFixed(2)} EUR</td>

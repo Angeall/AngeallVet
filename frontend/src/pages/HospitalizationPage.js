@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { hospitalizationAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function HospitalizationPage() {
   const [hospitalizations, setHospitalizations] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ animal_id: '', reason: '', cage_number: '' });
 
   const load = async () => {
     try {
@@ -17,22 +16,6 @@ export default function HospitalizationPage() {
   };
 
   useEffect(() => { load(); }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await hospitalizationAPI.create({
-        animal_id: parseInt(form.animal_id),
-        reason: form.reason,
-        cage_number: form.cage_number || null,
-      });
-      toast.success('Hospitalisation créée');
-      setShowForm(false);
-      load();
-    } catch {
-      toast.error('Erreur');
-    }
-  };
 
   const discharge = async (id) => {
     try {
@@ -47,7 +30,7 @@ export default function HospitalizationPage() {
   const completeTask = async (hospId, taskId) => {
     try {
       await hospitalizationAPI.updateTask(hospId, taskId, { is_completed: true });
-      toast.success('Tâche complétée');
+      toast.success('Tache completee');
       load();
     } catch {
       toast.error('Erreur');
@@ -60,48 +43,23 @@ export default function HospitalizationPage() {
         <div className="page-header-left">
           <h1 className="page-title">Hospitalisation</h1>
         </div>
-        <div className="page-header-actions">
-          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouvelle hospitalisation</button>
-        </div>
       </div>
-
-      {showForm && (
-        <div className="card">
-          <form onSubmit={handleSubmit}>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">ID Animal *</label>
-                <input className="form-input" value={form.animal_id} onChange={(e) => setForm({ ...form, animal_id: e.target.value })} required />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Cage</label>
-                <input className="form-input" value={form.cage_number} onChange={(e) => setForm({ ...form, cage_number: e.target.value })} />
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Motif *</label>
-              <textarea className="form-textarea" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} required />
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button type="submit" className="btn btn-primary">Hospitaliser</button>
-              <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {hospitalizations.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">🏥</div>
+          <div className="empty-state-icon">H</div>
           <h3>Aucune hospitalisation active</h3>
-          <p>Les animaux hospitalisés apparaîtront ici</p>
+          <p>Les animaux hospitalises apparaitront ici. Pour hospitaliser un animal, rendez-vous sur sa fiche.</p>
         </div>
       ) : (
         hospitalizations.map((h) => (
           <div key={h.id} className="card">
             <div className="card-header">
               <div>
-                <h3 className="card-title">Animal #{h.animal_id} - Cage {h.cage_number || 'N/A'}</h3>
+                <h3 className="card-title">
+                  <Link to={`/animals/${h.animal_id}`} className="table-link">Animal #{h.animal_id}</Link>
+                  {' '}- Cage {h.cage_number || 'N/A'}
+                </h3>
                 <span className={`badge badge-${h.status === 'active' ? 'green' : 'gray'}`}>{h.status}</span>
               </div>
               {h.status === 'active' && (

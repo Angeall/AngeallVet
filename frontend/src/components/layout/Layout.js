@@ -10,7 +10,6 @@ const navItems = [
   { section: 'Patients' },
   { path: '/clients', label: 'Clients', icon: 'users' },
   { path: '/animals', label: 'Animaux', icon: 'paw' },
-  { path: '/medical', label: 'Dossiers medicaux', icon: 'file' },
   { path: '/hospitalization', label: 'Hospitalisation', icon: 'hospital' },
   { section: 'Gestion' },
   { path: '/inventory', label: 'Stocks & Pharmacie', icon: 'box' },

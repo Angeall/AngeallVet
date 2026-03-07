@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { animalsAPI, medicalAPI } from '../services/api';
+import { animalsAPI, medicalAPI, hospitalizationAPI } from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
 
@@ -9,26 +9,37 @@ export default function AnimalDetailPage() {
   const [animal, setAnimal] = useState(null);
   const [weights, setWeights] = useState([]);
   const [records, setRecords] = useState([]);
+  const [templates, setTemplates] = useState([]);
+  const [hospitalizations, setHospitalizations] = useState([]);
   const [tab, setTab] = useState('info');
   const [newWeight, setNewWeight] = useState('');
+  const [showRecordForm, setShowRecordForm] = useState(false);
+  const [showHospForm, setShowHospForm] = useState(false);
+  const [recordForm, setRecordForm] = useState({
+    record_type: 'consultation', subjective: '', objective: '', assessment: '', plan: '', notes: '',
+  });
+  const [hospForm, setHospForm] = useState({ reason: '', cage_number: '' });
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [aRes, wRes, rRes] = await Promise.all([
-          animalsAPI.get(id),
-          animalsAPI.getWeights(id),
-          medicalAPI.listRecords({ animal_id: id }),
-        ]);
-        setAnimal(aRes.data);
-        setWeights(wRes.data);
-        setRecords(rRes.data);
-      } catch {
-        toast.error('Erreur de chargement');
-      }
+  const load = async () => {
+    try {
+      const [aRes, wRes, rRes, tRes, hRes] = await Promise.all([
+        animalsAPI.get(id),
+        animalsAPI.getWeights(id),
+        medicalAPI.listRecords({ animal_id: id }),
+        medicalAPI.listTemplates({}),
+        hospitalizationAPI.list({ animal_id: id }),
+      ]);
+      setAnimal(aRes.data);
+      setWeights(wRes.data);
+      setRecords(rRes.data);
+      setTemplates(tRes.data);
+      setHospitalizations(hRes.data);
+    } catch {
+      toast.error('Erreur de chargement');
     }
-    load();
-  }, [id]);
+  };
+
+  useEffect(() => { load(); }, [id]);
 
   const addWeight = async (e) => {
     e.preventDefault();
@@ -44,6 +55,63 @@ export default function AnimalDetailPage() {
     }
   };
 
+  const applyTemplate = (templateId) => {
+    const t = templates.find((tp) => tp.id === parseInt(templateId));
+    if (t) {
+      setRecordForm({
+        ...recordForm,
+        subjective: t.subjective || '',
+        objective: t.objective || '',
+        assessment: t.assessment || '',
+        plan: t.plan || '',
+      });
+    }
+  };
+
+  const handleRecordSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await medicalAPI.createRecord({ ...recordForm, animal_id: parseInt(id) });
+      toast.success('Dossier médical créé');
+      setShowRecordForm(false);
+      setRecordForm({ record_type: 'consultation', subjective: '', objective: '', assessment: '', plan: '', notes: '' });
+      const rRes = await medicalAPI.listRecords({ animal_id: id });
+      setRecords(rRes.data);
+    } catch {
+      toast.error('Erreur lors de la création');
+    }
+  };
+
+  const activeHosp = hospitalizations.find((h) => h.status === 'active');
+
+  const handleHospitalize = async (e) => {
+    e.preventDefault();
+    try {
+      await hospitalizationAPI.create({
+        animal_id: parseInt(id),
+        reason: hospForm.reason,
+        cage_number: hospForm.cage_number || null,
+      });
+      toast.success('Animal hospitalisé');
+      setShowHospForm(false);
+      setHospForm({ reason: '', cage_number: '' });
+      load();
+    } catch {
+      toast.error('Erreur');
+    }
+  };
+
+  const handleDischarge = async () => {
+    if (!activeHosp) return;
+    try {
+      await hospitalizationAPI.update(activeHosp.id, { status: 'discharged' });
+      toast.success('Animal sorti');
+      load();
+    } catch {
+      toast.error('Erreur');
+    }
+  };
+
   if (!animal) return <div className="page-content">Chargement...</div>;
 
   const weightChartData = [...weights].reverse().map((w) => ({
@@ -52,44 +120,75 @@ export default function AnimalDetailPage() {
   }));
 
   const recordTypeLabel = {
-    consultation: 'Consultation',
-    vaccination: 'Vaccination',
-    surgery: 'Chirurgie',
-    lab_result: 'Labo',
-    imaging: 'Imagerie',
-    note: 'Note',
+    consultation: 'Consultation', vaccination: 'Vaccination', surgery: 'Chirurgie',
+    lab_result: 'Labo', imaging: 'Imagerie', note: 'Note',
   };
 
   return (
     <div>
       <div className="page-header">
         <div className="page-header-left">
-          <Link to="/animals" className="breadcrumb-link">
-            Animaux /
-          </Link>
-          <h1 className="page-title">
-            {animal.name}
-          </h1>
+          <Link to="/animals" className="breadcrumb-link">Animaux /</Link>
+          <h1 className="page-title">{animal.name}</h1>
+        </div>
+        <div className="page-header-actions">
+          {activeHosp ? (
+            <button className="btn btn-secondary" onClick={handleDischarge}>
+              Sortie d'hospitalisation
+            </button>
+          ) : (
+            <button className="btn btn-primary" onClick={() => setShowHospForm(!showHospForm)}>
+              Hospitaliser
+            </button>
+          )}
         </div>
       </div>
+
+      {activeHosp && (
+        <div className="alert-banner warning">
+          Actuellement hospitalisé - Cage {activeHosp.cage_number || 'N/A'} - {activeHosp.reason}
+        </div>
+      )}
+
+      {showHospForm && !activeHosp && (
+        <div className="card">
+          <h3 className="card-title" style={{ marginBottom: '16px' }}>Hospitaliser {animal.name}</h3>
+          <form onSubmit={handleHospitalize}>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Motif *</label>
+                <textarea className="form-textarea" value={hospForm.reason} onChange={(e) => setHospForm({ ...hospForm, reason: e.target.value })} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Cage</label>
+                <input className="form-input" value={hospForm.cage_number} onChange={(e) => setHospForm({ ...hospForm, cage_number: e.target.value })} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="submit" className="btn btn-primary">Hospitaliser</button>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowHospForm(false)}>Annuler</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Alerts */}
       {animal.alerts?.filter((a) => a.is_active).map((alert) => (
         <div key={alert.id} className={`alert-banner ${alert.severity}`}>
-          {alert.severity === 'danger' ? '⚠️' : alert.severity === 'warning' ? '⚡' : 'ℹ️'}
-          <strong>{alert.alert_type}:</strong> {alert.message}
+          {alert.severity === 'danger' ? '!!!' : alert.severity === 'warning' ? '!' : 'i'}
+          {' '}<strong>{alert.alert_type}:</strong> {alert.message}
         </div>
       ))}
 
       {/* Info card */}
       <div className="card">
         <div className="form-row">
-          <div><strong>Espèce:</strong> {animal.species}</div>
+          <div><strong>Espece:</strong> {animal.species}</div>
           <div><strong>Race:</strong> {animal.breed || '-'}</div>
           <div><strong>Sexe:</strong> {animal.sex}</div>
-          <div><strong>Né(e) le:</strong> {animal.date_of_birth || '-'}</div>
+          <div><strong>Ne(e) le:</strong> {animal.date_of_birth || '-'}</div>
           <div><strong>Couleur:</strong> {animal.color || '-'}</div>
-          <div><strong>Stérilisé:</strong> {animal.is_neutered ? 'Oui' : 'Non'}</div>
+          <div><strong>Sterilise:</strong> {animal.is_neutered ? 'Oui' : 'Non'}</div>
           <div><strong>Puce:</strong> {animal.microchip_number || '-'}</div>
           <div><strong>Tatouage:</strong> {animal.tattoo_number || '-'}</div>
         </div>
@@ -98,7 +197,7 @@ export default function AnimalDetailPage() {
       <div className="tabs">
         {['info', 'weight', 'medical'].map((t) => (
           <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
-            {t === 'info' ? 'Informations' : t === 'weight' ? 'Courbe de poids' : 'Dossier médical'}
+            {t === 'info' ? 'Informations' : t === 'weight' ? 'Courbe de poids' : 'Dossier medical'}
           </button>
         ))}
       </div>
@@ -108,15 +207,7 @@ export default function AnimalDetailPage() {
           <div className="card-header">
             <h3 className="card-title">Courbe de poids</h3>
             <form onSubmit={addWeight} style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="number"
-                step="0.01"
-                className="form-input"
-                style={{ width: '120px' }}
-                placeholder="Poids (kg)"
-                value={newWeight}
-                onChange={(e) => setNewWeight(e.target.value)}
-              />
+              <input type="number" step="0.01" className="form-input" style={{ width: '120px' }} placeholder="Poids (kg)" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} />
               <button type="submit" className="btn btn-primary btn-sm">Ajouter</button>
             </form>
           </div>
@@ -131,7 +222,7 @@ export default function AnimalDetailPage() {
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <p style={{ color: 'var(--gray-400)', textAlign: 'center' }}>Aucune donnée de poids</p>
+            <p style={{ color: 'var(--gray-400)', textAlign: 'center' }}>Aucune donnee de poids</p>
           )}
         </div>
       )}
@@ -139,8 +230,55 @@ export default function AnimalDetailPage() {
       {tab === 'medical' && (
         <div className="card">
           <div className="card-header">
-            <h3 className="card-title">Historique médical</h3>
+            <h3 className="card-title">Historique medical</h3>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowRecordForm(!showRecordForm)}>
+              + Nouveau dossier
+            </button>
           </div>
+
+          {showRecordForm && (
+            <div style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+              <h4 style={{ marginBottom: '12px' }}>Nouveau dossier medical (SOAP)</h4>
+              <form onSubmit={handleRecordSubmit}>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Type *</label>
+                    <select className="form-select" value={recordForm.record_type} onChange={(e) => setRecordForm({ ...recordForm, record_type: e.target.value })}>
+                      {Object.entries(recordTypeLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Template</label>
+                    <select className="form-select" onChange={(e) => applyTemplate(e.target.value)}>
+                      <option value="">-- Choisir un modele --</option>
+                      {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">S - Subjectif (Motif / Anamnese)</label>
+                  <textarea className="form-textarea" value={recordForm.subjective} onChange={(e) => setRecordForm({ ...recordForm, subjective: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">O - Objectif (Examen clinique)</label>
+                  <textarea className="form-textarea" value={recordForm.objective} onChange={(e) => setRecordForm({ ...recordForm, objective: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">A - Assessment (Diagnostic)</label>
+                  <textarea className="form-textarea" value={recordForm.assessment} onChange={(e) => setRecordForm({ ...recordForm, assessment: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">P - Plan (Traitement)</label>
+                  <textarea className="form-textarea" value={recordForm.plan} onChange={(e) => setRecordForm({ ...recordForm, plan: e.target.value })} />
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="submit" className="btn btn-primary">Enregistrer</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowRecordForm(false)}>Annuler</button>
+                </div>
+              </form>
+            </div>
+          )}
+
           <div className="timeline">
             {records.map((r) => (
               <div key={r.id} className="timeline-item">
@@ -161,7 +299,7 @@ export default function AnimalDetailPage() {
               </div>
             ))}
             {records.length === 0 && (
-              <p style={{ color: 'var(--gray-400)', textAlign: 'center' }}>Aucun dossier médical</p>
+              <p style={{ color: 'var(--gray-400)', textAlign: 'center' }}>Aucun dossier medical</p>
             )}
           </div>
         </div>

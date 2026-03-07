@@ -225,6 +225,18 @@ def list_estimates(
     return query.order_by(Estimate.created_at.desc()).offset(skip).limit(limit).all()
 
 
+@router.get("/estimates/{estimate_id}", response_model=EstimateResponse)
+def get_estimate(
+    estimate_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    estimate = db.query(Estimate).filter(Estimate.id == estimate_id).first()
+    if not estimate:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    return estimate
+
+
 @router.post("/estimates/to-invoice", response_model=InvoiceResponse)
 def convert_estimate_to_invoice(
     data: EstimateToInvoiceRequest,
