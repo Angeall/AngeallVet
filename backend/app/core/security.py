@@ -135,19 +135,30 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
     db: Session = Depends(get_db),
 ):
-    """Extract user from Supabase JWT and find corresponding local profile."""
+    """Extract user from Supabase JWT, find local profile, and set tenant context."""
     from app.models.user import User
+    from app.core.database import set_tenant_id
 
     payload = verify_supabase_token(credentials.credentials)
     supabase_uid = payload.get("sub")
     if not supabase_uid:
         raise HTTPException(status_code=401, detail="Token invalide: sub manquant")
 
+    # Extract tenant_id from JWT app_metadata (set via Supabase admin)
+    app_metadata = payload.get("app_metadata", {})
+    jwt_tenant_id = app_metadata.get("tenant_id")
+
     user = db.query(User).filter(User.supabase_uid == supabase_uid).first()
     if user is None:
         user = _auto_provision_user(supabase_uid, db)
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé")
+
+    # Resolve tenant_id: prefer user's DB tenant_id, fallback to JWT
+    tenant_id = user.tenant_id or jwt_tenant_id
+    if tenant_id is not None:
+        set_tenant_id(int(tenant_id))
+
     return user
 
 

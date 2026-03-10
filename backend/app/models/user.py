@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SAEnum, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SAEnum, JSON, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
 
@@ -81,6 +82,9 @@ class User(Base):
     role = Column(SAEnum(UserRole), nullable=False, default=UserRole.ASSISTANT)
     phone = Column(String(20))
     is_active = Column(Boolean, default=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     google_calendar_token = Column(String(500))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    tenant = relationship("Tenant")

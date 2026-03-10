@@ -19,6 +19,7 @@ class Hospitalization(Base):
     __tablename__ = "hospitalizations"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     animal_id = Column(Integer, ForeignKey("animals.id"), nullable=False, index=True)
     veterinarian_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     status = Column(SAEnum(HospitalizationStatus), default=HospitalizationStatus.ACTIVE)

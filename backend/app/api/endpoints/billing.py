@@ -281,6 +281,64 @@ def convert_estimate_to_invoice(
     return invoice
 
 
+# ─── Debts (clients with outstanding balances) ──────────────────────
+
+@router.get("/debts")
+def list_debts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return clients with unpaid invoices, sorted by outstanding amount DESC."""
+    results = (
+        db.query(
+            Client.id,
+            Client.first_name,
+            Client.last_name,
+            Client.email,
+            Client.phone,
+            sa_func.count(Invoice.id).label("invoice_count"),
+            sa_func.coalesce(sa_func.sum(Invoice.total), 0).label("total_due"),
+            sa_func.coalesce(sa_func.sum(Invoice.amount_paid), 0).label("total_paid"),
+            (
+                sa_func.coalesce(sa_func.sum(Invoice.total), 0)
+                - sa_func.coalesce(sa_func.sum(Invoice.amount_paid), 0)
+            ).label("outstanding"),
+        )
+        .join(Invoice, Invoice.client_id == Client.id)
+        .filter(
+            Invoice.status.in_([
+                InvoiceStatus.SENT,
+                InvoiceStatus.PARTIAL,
+                InvoiceStatus.OVERDUE,
+                InvoiceStatus.DRAFT,
+            ])
+        )
+        .group_by(Client.id, Client.first_name, Client.last_name, Client.email, Client.phone)
+        .having(
+            sa_func.coalesce(sa_func.sum(Invoice.total), 0)
+            - sa_func.coalesce(sa_func.sum(Invoice.amount_paid), 0)
+            > 0
+        )
+        .order_by(sa_func.text("outstanding DESC"))
+        .all()
+    )
+
+    return [
+        {
+            "client_id": r.id,
+            "first_name": r.first_name,
+            "last_name": r.last_name,
+            "email": r.email,
+            "phone": r.phone,
+            "invoice_count": r.invoice_count,
+            "total_due": round(float(r.total_due), 2),
+            "total_paid": round(float(r.total_paid), 2),
+            "outstanding": round(float(r.outstanding), 2),
+        }
+        for r in results
+    ]
+
+
 # ─── Statistics ─────────────────────────────────────────────────────
 
 @router.get("/stats")

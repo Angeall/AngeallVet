@@ -23,6 +23,7 @@ import HospitalizationPage from './pages/HospitalizationPage';
 import HospitalizationDetailPage from './pages/HospitalizationDetailPage';
 import SalesPage from './pages/SalesPage';
 import StatsPage from './pages/StatsPage';
+import DebtsPage from './pages/DebtsPage';
 import UsersPage from './pages/UsersPage';
 
 function PrivateRoute({ children }) {
@@ -61,6 +62,7 @@ function App() {
                   <Route path="/hospitalization" element={<HospitalizationPage />} />
                   <Route path="/hospitalization/:id" element={<HospitalizationDetailPage />} />
                   <Route path="/sales" element={<SalesPage />} />
+                  <Route path="/debts" element={<DebtsPage />} />
                   <Route path="/stats" element={<StatsPage />} />
                   <Route path="/users" element={<UsersPage />} />
                 </Routes>

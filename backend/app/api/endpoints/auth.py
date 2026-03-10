@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
 from app.core.supabase import get_supabase_admin
 from app.models.user import User, UserRole, RolePermission, Notification, DEFAULT_PERMISSIONS
+from app.models.tenant import Tenant
 from app.schemas.user import (
     UserCreate, UserUpdate, UserResponse, LoginRequest, TokenResponse,
     RolePermissionUpdate, RolePermissionResponse, NotificationResponse,
@@ -267,3 +268,86 @@ def mark_all_read(
     ).update({"is_read": True})
     db.commit()
     return {"ok": True}
+
+
+# ─── Tenant Management ────────────────────────────────────────────
+
+@router.get("/tenants")
+def list_tenants(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+):
+    """List all tenants (super-admin only)."""
+    return db.query(Tenant).order_by(Tenant.name).all()
+
+
+@router.post("/tenants", status_code=201)
+def create_tenant(
+    name: str,
+    slug: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+):
+    """Create a new tenant (clinic/organisation)."""
+    if db.query(Tenant).filter(Tenant.slug == slug).first():
+        raise HTTPException(status_code=400, detail="Ce slug est deja utilise")
+    tenant = Tenant(name=name, slug=slug)
+    db.add(tenant)
+    db.commit()
+    db.refresh(tenant)
+    return tenant
+
+
+@router.put("/tenants/{tenant_id}")
+def update_tenant(
+    tenant_id: int,
+    name: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+):
+    """Update a tenant."""
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant non trouve")
+    if name is not None:
+        tenant.name = name
+    if is_active is not None:
+        tenant.is_active = is_active
+    db.commit()
+    db.refresh(tenant)
+    return tenant
+
+
+@router.post("/tenants/{tenant_id}/assign-user")
+def assign_user_to_tenant(
+    tenant_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+):
+    """Assign a user to a tenant. Also updates Supabase app_metadata for RLS."""
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant non trouve")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouve")
+
+    user.tenant_id = tenant_id
+    db.commit()
+
+    # Sync tenant_id to Supabase app_metadata so JWT includes it
+    try:
+        supabase = get_supabase_admin()
+        supabase.auth.admin.update_user_by_id(
+            user.supabase_uid,
+            {"app_metadata": {"tenant_id": tenant_id}},
+        )
+    except Exception as e:
+        # Non-blocking: the DB is the source of truth
+        import logging
+        logging.getLogger(__name__).warning("Failed to sync tenant_id to Supabase: %s", e)
+
+    return {"ok": True, "user_id": user_id, "tenant_id": tenant_id}

@@ -1,3 +1,4 @@
+from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.client import Client
 from app.models.animal import Animal, AnimalAlert, WeightRecord
@@ -15,7 +16,7 @@ from app.models.communication import Communication, ReminderRule, ReminderLog
 from app.models.hospitalization import Hospitalization, CareTask
 
 __all__ = [
-    "User", "Client", "Animal", "AnimalAlert", "WeightRecord",
+    "Tenant", "User", "Client", "Animal", "AnimalAlert", "WeightRecord",
     "Appointment", "MedicalRecord", "ConsultationTemplate",
     "Prescription", "PrescriptionItem", "Attachment",
     "Product", "ProductLot", "StockMovement", "Supplier",

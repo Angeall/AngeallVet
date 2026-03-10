@@ -22,6 +22,7 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     invoice_number = Column(String(50), unique=True, nullable=False, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
     animal_id = Column(Integer, ForeignKey("animals.id"))
@@ -63,6 +64,7 @@ class Estimate(Base):
     __tablename__ = "estimates"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     estimate_number = Column(String(50), unique=True, nullable=False, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     animal_id = Column(Integer, ForeignKey("animals.id"))

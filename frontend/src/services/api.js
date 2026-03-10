@@ -122,6 +122,7 @@ export const billingAPI = {
   createEstimate: (data) => api.post('/billing/estimates', data),
   convertEstimateToInvoice: (data) => api.post('/billing/estimates/to-invoice', data),
   getStats: (params) => api.get('/billing/stats', { params }),
+  listDebts: () => api.get('/billing/debts'),
 };
 
 // Communications

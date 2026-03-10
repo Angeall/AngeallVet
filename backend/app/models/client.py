@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -9,6 +9,7 @@ class Client(Base):
     __tablename__ = "clients"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False, index=True)
     email = Column(String(255), index=True)

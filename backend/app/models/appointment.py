@@ -32,6 +32,7 @@ class Appointment(Base):
     __tablename__ = "appointments"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
     animal_id = Column(Integer, ForeignKey("animals.id"), index=True)
     veterinarian_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
