@@ -7,7 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_central_db
 
 logger = logging.getLogger(__name__)
 security_scheme = HTTPBearer()
@@ -133,20 +133,17 @@ def _auto_provision_user(supabase_uid: str, db: Session):
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
 ):
-    """Extract user from Supabase JWT, find local profile, and set tenant context."""
+    """Extract user from Supabase JWT, find local profile, and route to tenant DB."""
     from app.models.user import User
-    from app.core.database import set_tenant_id
+    from app.models.tenant import Tenant
+    from app.core.database import set_tenant_db_url
 
     payload = verify_supabase_token(credentials.credentials)
     supabase_uid = payload.get("sub")
     if not supabase_uid:
         raise HTTPException(status_code=401, detail="Token invalide: sub manquant")
-
-    # Extract tenant_id from JWT app_metadata (set via Supabase admin)
-    app_metadata = payload.get("app_metadata", {})
-    jwt_tenant_id = app_metadata.get("tenant_id")
 
     user = db.query(User).filter(User.supabase_uid == supabase_uid).first()
     if user is None:
@@ -154,10 +151,11 @@ def get_current_user(
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé")
 
-    # Resolve tenant_id: prefer user's DB tenant_id, fallback to JWT
-    tenant_id = user.tenant_id or jwt_tenant_id
-    if tenant_id is not None:
-        set_tenant_id(int(tenant_id))
+    # Resolve tenant and set the tenant database URL for all downstream queries
+    if user.tenant_id:
+        tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+        if tenant and tenant.is_active and tenant.database_url:
+            set_tenant_db_url(tenant.database_url)
 
     return user
 

@@ -430,21 +430,175 @@ tbody tr:last-child td { border-bottom: none; }
 .line-item-row .form-group { margin-bottom: 0; }
 
 /* === RESPONSIVE === */
+
+/* --- Tablet (max-width: 1024px) --- */
 @media (max-width: 1024px) {
+  /* Login: hide visual panel, form side full width */
   .login-visual { display: none; }
   .login-form-side { width: 100%; }
-  .header-search { width: 240px; }
+
+  /* Header: shrink search bar */
+  .header-search { width: 200px; }
+
+  /* Page content: slightly less padding */
+  .page-content { padding: 24px 24px; }
+
+  /* Stats grid: 2 columns on tablet */
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Modal: slightly tighter */
+  .modal { max-width: 560px; padding: 24px; }
 }
+
+/* --- Mobile (max-width: 768px) --- */
 @media (max-width: 768px) {
+  /* Sidebar: off-canvas */
   .sidebar { transform: translateX(-100%); }
   .sidebar.open { transform: translateX(0); }
   .main-content { margin-left: 0; }
+
+  /* Header */
   .menu-toggle { display: flex; }
-  .page-content { padding: 20px 16px; }
   .header { padding: 0 16px; }
   .header-search { display: none; }
+
+  /* Page content */
+  .page-content { padding: 20px 16px; }
+
+  /* Page header: stack vertically */
+  .page-header { flex-direction: column; align-items: stretch; }
+  .page-header-actions { flex-wrap: wrap; }
+  .page-title { font-size: 1.35rem; }
+
+  /* Stats grid: single column, compact */
+  .stats-grid { grid-template-columns: 1fr; gap: 12px; }
+  .stat-value { font-size: 1.4rem; }
+  .stat-icon { width: 42px; height: 42px; font-size: 1.2rem; }
+
+  /* Cards: smaller padding */
+  .card { padding: 18px; }
+
+  /* Forms: single column */
   .form-row { grid-template-columns: 1fr; }
-  .stats-grid { grid-template-columns: 1fr; }
-  .page-header { flex-direction: column; }
+
+  /* Line items: stack */
   .line-item-row { grid-template-columns: 1fr; }
+
+  /* Tables: horizontally scrollable */
+  .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-container table { min-width: 600px; }
+
+  /* Buttons: full width on mobile */
+  .btn { width: 100%; justify-content: center; }
+  .btn-sm { width: auto; }
+  .modal-footer .btn { width: auto; }
+  .page-header-actions .btn { width: auto; flex: 1; min-width: 0; }
+
+  /* Larger touch targets */
+  .btn { min-height: 44px; }
+  .btn-sm { min-height: 36px; }
+  .form-input, .form-select, .form-textarea { padding: 11px 13px; font-size: 16px; }
+  .nav-link { padding: 12px 16px; }
+
+  /* Badge: smaller font */
+  .badge { font-size: 0.68rem; padding: 2px 8px; }
+
+  /* Modal: full width with smaller padding */
+  .modal { width: 96%; max-width: none; padding: 20px; border-radius: var(--radius-xl); }
+  .modal-title { font-size: 1.05rem; }
+
+  /* Tabs: horizontal scroll if needed */
+  .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex-shrink: 0; }
+
+  /* Waiting room cards: stack content */
+  .waiting-room-card { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .waiting-room-info { width: 100%; }
+
+  /* Agenda slots: stack */
+  .agenda-slot { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .agenda-slot-time { min-width: unset; }
+  .agenda-legend { gap: 10px; }
+
+  /* Login form: full width */
+  .login-form-side { width: 100%; padding: 32px 20px; }
+  .login-card { max-width: 100%; }
+
+  /* Empty state: compact */
+  .empty-state { padding: 40px 20px; }
+  .empty-state-icon { font-size: 2.5rem; }
+}
+
+/* --- Small mobile (max-width: 480px) --- */
+@media (max-width: 480px) {
+  /* Even smaller padding */
+  .page-content { padding: 16px 12px; }
+  .header { padding: 0 12px; }
+
+  /* Smaller page title */
+  .page-title { font-size: 1.2rem; }
+  .page-subtitle { font-size: 0.82rem; }
+
+  /* Stats: more compact */
+  .stats-grid { gap: 8px; margin-bottom: 20px; }
+  .stat-card { padding: 14px 16px; gap: 12px; }
+  .stat-value { font-size: 1.25rem; }
+  .stat-label { font-size: 0.75rem; }
+  .stat-icon { width: 38px; height: 38px; font-size: 1.05rem; border-radius: var(--radius); }
+
+  /* Cards: tighter */
+  .card { padding: 14px; border-radius: var(--radius-lg); margin-bottom: 14px; }
+  .card-title { font-size: 0.95rem; }
+  .card-header { margin-bottom: 14px; }
+
+  /* Modal: nearly full screen */
+  .modal {
+    width: 100%;
+    max-height: 96vh;
+    padding: 16px;
+    border-radius: var(--radius-lg);
+    margin: 8px;
+  }
+  .modal-title { font-size: 1rem; }
+  .modal-header { margin-bottom: 16px; }
+  .modal-footer { margin-top: 16px; padding-top: 14px; gap: 6px; }
+  .modal-footer .btn { flex: 1; }
+
+  /* Very small fonts for secondary text */
+  .page-breadcrumb { font-size: 0.72rem; }
+  .badge { font-size: 0.65rem; padding: 1px 7px; }
+  th { font-size: 0.68rem; padding: 8px 10px; }
+  td { font-size: 0.82rem; padding: 10px; }
+
+  /* Table: needs more scroll room */
+  .table-container table { min-width: 540px; }
+
+  /* Tabs: compact */
+  .tab { padding: 6px 12px; font-size: 0.78rem; }
+
+  /* Login */
+  .login-form-side { padding: 24px 16px; }
+  .login-title { font-size: 1.3rem; }
+  .login-subtitle { font-size: 0.85rem; margin-bottom: 24px; }
+
+  /* Waiting room / agenda compact */
+  .waiting-room-card { padding: 14px 16px; }
+  .waiting-room-time { font-size: 1rem; }
+  .agenda-slot { padding: 12px 14px; }
+
+  /* Empty state */
+  .empty-state { padding: 32px 16px; }
+  .empty-state-icon { font-size: 2rem; }
+  .empty-state h3 { font-size: 0.95rem; }
+  .empty-state p { font-size: 0.82rem; }
+
+  /* Sidebar overlay when open */
+  .sidebar.open { box-shadow: var(--shadow-2xl); }
 }

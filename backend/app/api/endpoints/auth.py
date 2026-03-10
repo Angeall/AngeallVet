@@ -271,10 +271,15 @@ def mark_all_read(
 
 
 # ─── Tenant Management ────────────────────────────────────────────
+# Tenants live in the CENTRAL database (not tenant DBs).
+# We use get_central_db here explicitly.
+
+from app.core.database import get_central_db, init_tenant_database
+
 
 @router.get("/tenants")
 def list_tenants(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     """List all tenants (super-admin only)."""
@@ -285,16 +290,34 @@ def list_tenants(
 def create_tenant(
     name: str,
     slug: str,
-    db: Session = Depends(get_db),
+    database_url: str,
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
-    """Create a new tenant (clinic/organisation)."""
+    """Create a new tenant with its own database.
+
+    The database_url should point to an existing (empty) PostgreSQL database.
+    All tables will be automatically created in it.
+    """
     if db.query(Tenant).filter(Tenant.slug == slug).first():
         raise HTTPException(status_code=400, detail="Ce slug est deja utilise")
-    tenant = Tenant(name=name, slug=slug)
+
+    tenant = Tenant(name=name, slug=slug, database_url=database_url)
     db.add(tenant)
     db.commit()
     db.refresh(tenant)
+
+    # Provision: create all data tables in the tenant's database
+    try:
+        init_tenant_database(database_url)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Failed to provision tenant DB: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Tenant cree mais erreur de provisioning de la base: {e}",
+        )
+
     return tenant
 
 
@@ -303,7 +326,7 @@ def update_tenant(
     tenant_id: int,
     name: Optional[str] = None,
     is_active: Optional[bool] = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     """Update a tenant."""
@@ -323,10 +346,10 @@ def update_tenant(
 def assign_user_to_tenant(
     tenant_id: int,
     user_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
-    """Assign a user to a tenant. Also updates Supabase app_metadata for RLS."""
+    """Assign a user to a tenant. Also syncs to Supabase app_metadata."""
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant non trouve")
@@ -338,7 +361,7 @@ def assign_user_to_tenant(
     user.tenant_id = tenant_id
     db.commit()
 
-    # Sync tenant_id to Supabase app_metadata so JWT includes it
+    # Sync tenant_id to Supabase app_metadata
     try:
         supabase = get_supabase_admin()
         supabase.auth.admin.update_user_by_id(
@@ -346,7 +369,6 @@ def assign_user_to_tenant(
             {"app_metadata": {"tenant_id": tenant_id}},
         )
     except Exception as e:
-        # Non-blocking: the DB is the source of truth
         import logging
         logging.getLogger(__name__).warning("Failed to sync tenant_id to Supabase: %s", e)
 

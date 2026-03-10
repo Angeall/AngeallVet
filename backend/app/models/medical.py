@@ -22,7 +22,6 @@ class MedicalRecord(Base):
     __tablename__ = "medical_records"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     animal_id = Column(Integer, ForeignKey("animals.id"), nullable=False, index=True)
     veterinarian_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True)
@@ -47,7 +46,6 @@ class ConsultationTemplate(Base):
     __tablename__ = "consultation_templates"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     name = Column(String(200), nullable=False)
     category = Column(String(100))
     species = Column(String(50))
