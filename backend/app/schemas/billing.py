@@ -50,6 +50,7 @@ class InvoiceResponse(BaseModel):
     amount_paid: Decimal
     notes: Optional[str] = None
     lines: List[InvoiceLineResponse] = []
+    payments: List["PaymentResponse"] = []
     created_at: datetime
 
     class Config:
@@ -118,3 +119,7 @@ class PaymentResponse(PaymentCreate):
 
 class EstimateToInvoiceRequest(BaseModel):
     estimate_id: int
+
+
+# Resolve forward reference for InvoiceResponse.payments
+InvoiceResponse.model_rebuild()
