@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SAEnum, JSON
 from sqlalchemy.sql import func
 import enum
 
@@ -10,6 +10,64 @@ class UserRole(str, enum.Enum):
     VETERINARIAN = "veterinarian"
     ASSISTANT = "assistant"
     ACCOUNTANT = "accountant"
+    GUEST = "guest"
+
+
+# Default permissions per role
+DEFAULT_PERMISSIONS = {
+    "admin": {
+        "dashboard": True, "clients": True, "animals": True, "agenda": True,
+        "waiting_room": True, "medical": True, "inventory": True,
+        "invoices": True, "estimates": True, "sales": True,
+        "hospitalization": True, "communications": True, "users": True, "stats": True,
+    },
+    "veterinarian": {
+        "dashboard": True, "clients": True, "animals": True, "agenda": True,
+        "waiting_room": True, "medical": True, "inventory": True,
+        "invoices": True, "estimates": True, "sales": True,
+        "hospitalization": True, "communications": True, "users": False, "stats": True,
+    },
+    "assistant": {
+        "dashboard": True, "clients": True, "animals": True, "agenda": True,
+        "waiting_room": True, "medical": False, "inventory": True,
+        "invoices": True, "estimates": True, "sales": True,
+        "hospitalization": True, "communications": True, "users": False, "stats": False,
+    },
+    "accountant": {
+        "dashboard": True, "clients": True, "animals": False, "agenda": False,
+        "waiting_room": False, "medical": False, "inventory": True,
+        "invoices": True, "estimates": True, "sales": True,
+        "hospitalization": False, "communications": False, "users": False, "stats": True,
+    },
+    "guest": {
+        "dashboard": True, "clients": False, "animals": False, "agenda": True,
+        "waiting_room": True, "medical": False, "inventory": False,
+        "invoices": False, "estimates": False, "sales": False,
+        "hospitalization": False, "communications": False, "users": False, "stats": False,
+    },
+}
+
+
+class RolePermission(Base):
+    __tablename__ = "role_permissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    role = Column(SAEnum(UserRole), nullable=False, unique=True)
+    permissions = Column(JSON, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    message = Column(String(1000))
+    notification_type = Column(String(50), default="info")  # info, waiting_room, alert
+    is_read = Column(Boolean, default=False)
+    link = Column(String(255))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class User(Base):

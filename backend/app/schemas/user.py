@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Dict
 from datetime import datetime
 from app.models.user import UserRole
 
@@ -46,3 +46,31 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+# Role permissions
+class RolePermissionUpdate(BaseModel):
+    permissions: Dict[str, bool]
+
+
+class RolePermissionResponse(BaseModel):
+    role: str
+    permissions: Dict[str, bool]
+
+    class Config:
+        from_attributes = True
+
+
+# Notifications
+class NotificationResponse(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    message: Optional[str] = None
+    notification_type: str
+    is_read: bool
+    link: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

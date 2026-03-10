@@ -1,25 +1,27 @@
-import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { authAPI } from '../../services/api';
 
 const navItems = [
   { section: 'Principal' },
-  { path: '/', label: 'Tableau de bord', icon: 'dashboard' },
-  { path: '/agenda', label: 'Agenda', icon: 'calendar' },
-  { path: '/waiting-room', label: "Salle d'attente", icon: 'clock' },
+  { path: '/', label: 'Tableau de bord', icon: 'dashboard', perm: 'dashboard' },
+  { path: '/agenda', label: 'Agenda', icon: 'calendar', perm: 'agenda' },
+  { path: '/waiting-room', label: "Salle d'attente", icon: 'clock', perm: 'waiting_room' },
   { section: 'Patients' },
-  { path: '/clients', label: 'Clients', icon: 'users' },
-  { path: '/animals', label: 'Animaux', icon: 'paw' },
-  { path: '/hospitalization', label: 'Hospitalisation', icon: 'hospital' },
+  { path: '/clients', label: 'Clients', icon: 'users', perm: 'clients' },
+  { path: '/animals', label: 'Animaux', icon: 'paw', perm: 'animals' },
+  { path: '/hospitalization', label: 'Hospitalisation', icon: 'hospital', perm: 'hospitalization' },
   { section: 'Gestion' },
-  { path: '/inventory', label: 'Stocks & Pharmacie', icon: 'box' },
-  { path: '/invoices', label: 'Factures', icon: 'receipt' },
-  { path: '/estimates', label: 'Devis', icon: 'edit' },
-  { path: '/sales', label: 'Vente comptoir', icon: 'cart' },
+  { path: '/inventory', label: 'Stocks & Pharmacie', icon: 'box', perm: 'inventory' },
+  { path: '/invoices', label: 'Factures', icon: 'receipt', perm: 'invoices' },
+  { path: '/estimates', label: 'Devis', icon: 'edit', perm: 'estimates' },
+  { path: '/sales', label: 'Vente comptoir', icon: 'cart', perm: 'sales' },
+  { path: '/stats', label: 'Statistiques', icon: 'chart', perm: 'stats' },
   { section: 'Communication' },
-  { path: '/communications', label: 'Communications', icon: 'mail' },
+  { path: '/communications', label: 'Communications', icon: 'mail', perm: 'communications' },
   { section: 'Administration' },
-  { path: '/users', label: 'Utilisateurs', icon: 'team' },
+  { path: '/users', label: 'Utilisateurs', icon: 'team', perm: 'users' },
 ];
 
 const icons = {
@@ -35,16 +37,85 @@ const icons = {
   edit: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
   mail: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
   cart: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>,
+  chart: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
   team: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
 };
 
-const roleLabels = { admin: 'Administrateur', veterinarian: 'Veterinaire', assistant: 'ASV', accountant: 'Comptable' };
+const roleLabels = { admin: 'Administrateur', veterinarian: 'Veterinaire', assistant: 'ASV', accountant: 'Comptable', guest: 'Invite' };
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [permissions, setPermissions] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+
+  // Load permissions on mount
+  useEffect(() => {
+    authAPI.myPermissions().then(res => setPermissions(res.data.permissions)).catch(() => {});
+  }, [user?.role]);
+
+  // Poll unread notification count every 15s
+  const fetchUnread = useCallback(() => {
+    authAPI.unreadCount().then(res => setUnreadCount(res.data.count)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 15000);
+    return () => clearInterval(interval);
+  }, [fetchUnread]);
+
+  const openNotifications = async () => {
+    setShowNotifs(!showNotifs);
+    if (!showNotifs) {
+      try {
+        const res = await authAPI.listNotifications({ limit: 20 });
+        setNotifications(res.data);
+      } catch {}
+    }
+  };
+
+  const markRead = async (notif) => {
+    try {
+      if (!notif.is_read) {
+        await authAPI.markRead(notif.id);
+        setUnreadCount(prev => Math.max(0, prev - 1));
+        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n));
+      }
+      if (notif.link) {
+        navigate(notif.link);
+        setShowNotifs(false);
+      }
+    } catch {}
+  };
+
+  const markAllRead = async () => {
+    try {
+      await authAPI.markAllRead();
+      setUnreadCount(0);
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch {}
+  };
 
   const initials = user ? `${(user.first_name || '')[0] || ''}${(user.last_name || '')[0] || ''}`.toUpperCase() : '?';
+
+  // Filter nav items based on permissions
+  const filteredNavItems = navItems.filter(item => {
+    if (item.section) return true;
+    if (!permissions) return true; // show all while loading
+    if (!item.perm) return true;
+    return permissions[item.perm] !== false;
+  });
+
+  // Remove consecutive sections with no items after them
+  const cleanedNavItems = filteredNavItems.filter((item, i) => {
+    if (!item.section) return true;
+    const next = filteredNavItems[i + 1];
+    return next && !next.section;
+  });
 
   return (
     <div className="app-layout">
@@ -65,7 +136,7 @@ export default function Layout({ children }) {
         </div>
 
         <nav className="sidebar-nav">
-          {navItems.map((item, i) =>
+          {cleanedNavItems.map((item, i) =>
             item.section ? (
               <div key={i} className="sidebar-section">{item.section}</div>
             ) : (
@@ -110,11 +181,61 @@ export default function Layout({ children }) {
               <input placeholder="Rechercher un client, animal, produit..." />
             </div>
           </div>
-          <div className="header-right">
-            <button className="header-btn" title="Notifications">
+          <div className="header-right" style={{ position: 'relative' }}>
+            <button className="header-btn" title="Notifications" onClick={openNotifications} style={{ position: 'relative' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              <span className="notification-dot" />
+              {unreadCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: '-2px', right: '-2px', width: '18px', height: '18px',
+                  borderRadius: '50%', background: 'var(--red, #ef4444)', color: 'white',
+                  fontSize: '0.65rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
+              )}
             </button>
+
+            {showNotifs && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, width: '360px', maxHeight: '400px',
+                background: 'white', border: '1px solid var(--gray-200)', borderRadius: '8px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, overflow: 'hidden',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--gray-100)' }}>
+                  <strong>Notifications</strong>
+                  {unreadCount > 0 && (
+                    <button onClick={markAllRead} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.8rem' }}>
+                      Tout marquer comme lu
+                    </button>
+                  )}
+                </div>
+                <div style={{ maxHeight: '340px', overflowY: 'auto' }}>
+                  {notifications.length === 0 ? (
+                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--gray-400)' }}>Aucune notification</div>
+                  ) : (
+                    notifications.map(n => (
+                      <div
+                        key={n.id}
+                        onClick={() => markRead(n)}
+                        style={{
+                          padding: '10px 16px', cursor: 'pointer', borderBottom: '1px solid var(--gray-50)',
+                          background: n.is_read ? 'white' : 'var(--blue-50, #eff6ff)',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--gray-50)'}
+                        onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'white' : 'var(--blue-50, #eff6ff)'}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <strong style={{ fontSize: '0.85rem' }}>{n.title}</strong>
+                          {!n.is_read && <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary)', flexShrink: 0 }} />}
+                        </div>
+                        {n.message && <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginTop: '2px' }}>{n.message}</div>}
+                        <div style={{ fontSize: '0.7rem', color: 'var(--gray-400)', marginTop: '4px' }}>
+                          {new Date(n.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </header>
         <main className="page-content">{children}</main>

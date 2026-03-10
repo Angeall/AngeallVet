@@ -38,6 +38,15 @@ export const authAPI = {
   listUsers: () => api.get('/auth/users'),
   updateUser: (id, data) => api.put(`/auth/users/${id}`, data),
   register: (data) => api.post('/auth/register', data),
+  // Permissions
+  listPermissions: () => api.get('/auth/permissions'),
+  myPermissions: () => api.get('/auth/permissions/me'),
+  updatePermissions: (role, data) => api.put(`/auth/permissions/${role}`, data),
+  // Notifications
+  listNotifications: (params) => api.get('/auth/notifications', { params }),
+  unreadCount: () => api.get('/auth/notifications/unread-count'),
+  markRead: (id) => api.patch(`/auth/notifications/${id}/read`),
+  markAllRead: () => api.patch('/auth/notifications/read-all'),
 };
 
 // Clients
@@ -112,6 +121,7 @@ export const billingAPI = {
   getEstimate: (id) => api.get(`/billing/estimates/${id}`),
   createEstimate: (data) => api.post('/billing/estimates', data),
   convertEstimateToInvoice: (data) => api.post('/billing/estimates/to-invoice', data),
+  getStats: (params) => api.get('/billing/stats', { params }),
 };
 
 // Communications

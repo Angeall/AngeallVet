@@ -5,7 +5,7 @@ from datetime import datetime, date
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models.user import User
+from app.models.user import User, UserRole, Notification
 from app.models.appointment import Appointment, AppointmentStatus
 from app.schemas.appointment import (
     AppointmentCreate, AppointmentUpdate, AppointmentResponse, WaitingRoomUpdate,
@@ -113,7 +113,36 @@ def update_waiting_room_status(
     appt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not appt:
         raise HTTPException(status_code=404, detail="Rendez-vous non trouvé")
+
+    old_status = appt.status
     appt.status = data.status
+
+    # Notify veterinarian(s) when a client arrives in the waiting room
+    if data.status in (AppointmentStatus.ARRIVED, "arrived"):
+        vet_ids = set()
+        # Notify the assigned vet
+        if appt.veterinarian_id:
+            vet_ids.add(appt.veterinarian_id)
+        # Also notify all vets if no specific vet is assigned
+        if not vet_ids:
+            vets = db.query(User).filter(
+                User.role == UserRole.VETERINARIAN,
+                User.is_active == True,
+            ).all()
+            vet_ids = {v.id for v in vets}
+
+        time_str = appt.start_time.strftime("%H:%M") if appt.start_time else ""
+        reason = appt.reason or appt.appointment_type.value if appt.appointment_type else "RDV"
+        for vet_id in vet_ids:
+            notif = Notification(
+                user_id=vet_id,
+                title="Patient en salle d'attente",
+                message=f"RDV {time_str} - {reason}",
+                notification_type="waiting_room",
+                link="/waiting-room",
+            )
+            db.add(notif)
+
     db.commit()
     db.refresh(appt)
     return appt

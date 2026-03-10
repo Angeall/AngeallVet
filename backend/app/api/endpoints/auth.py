@@ -1,13 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from gotrue.errors import AuthApiError
+from typing import Optional
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
 from app.core.supabase import get_supabase_admin
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, RolePermission, Notification, DEFAULT_PERMISSIONS
 from app.schemas.user import (
     UserCreate, UserUpdate, UserResponse, LoginRequest, TokenResponse,
+    RolePermissionUpdate, RolePermissionResponse, NotificationResponse,
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -147,3 +149,121 @@ def update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+# ─── Role Permissions ───────────────────────────────────────────────
+
+@router.get("/permissions", response_model=list[RolePermissionResponse])
+def list_permissions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get permissions for all roles. Returns DB-stored overrides or defaults."""
+    result = []
+    for role in UserRole:
+        db_perm = db.query(RolePermission).filter(RolePermission.role == role).first()
+        if db_perm:
+            result.append(RolePermissionResponse(role=role.value, permissions=db_perm.permissions))
+        else:
+            result.append(RolePermissionResponse(
+                role=role.value,
+                permissions=DEFAULT_PERMISSIONS.get(role.value, {}),
+            ))
+    return result
+
+
+@router.get("/permissions/me")
+def my_permissions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get current user's permissions."""
+    db_perm = db.query(RolePermission).filter(RolePermission.role == current_user.role).first()
+    if db_perm:
+        return {"role": current_user.role.value, "permissions": db_perm.permissions}
+    return {
+        "role": current_user.role.value,
+        "permissions": DEFAULT_PERMISSIONS.get(current_user.role.value, {}),
+    }
+
+
+@router.put("/permissions/{role}", response_model=RolePermissionResponse)
+def update_permissions(
+    role: str,
+    data: RolePermissionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+):
+    """Update permissions for a role (admin only)."""
+    try:
+        role_enum = UserRole(role)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Rôle invalide")
+
+    db_perm = db.query(RolePermission).filter(RolePermission.role == role_enum).first()
+    if db_perm:
+        db_perm.permissions = data.permissions
+    else:
+        db_perm = RolePermission(role=role_enum, permissions=data.permissions)
+        db.add(db_perm)
+
+    db.commit()
+    db.refresh(db_perm)
+    return RolePermissionResponse(role=role_enum.value, permissions=db_perm.permissions)
+
+
+# ─── Notifications ──────────────────────────────────────────────────
+
+@router.get("/notifications", response_model=list[NotificationResponse])
+def list_notifications(
+    unread_only: bool = Query(False),
+    limit: int = Query(20),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = db.query(Notification).filter(Notification.user_id == current_user.id)
+    if unread_only:
+        query = query.filter(Notification.is_read == False)
+    return query.order_by(Notification.created_at.desc()).limit(limit).all()
+
+
+@router.get("/notifications/unread-count")
+def unread_count(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    count = db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.is_read == False,
+    ).count()
+    return {"count": count}
+
+
+@router.patch("/notifications/{notification_id}/read")
+def mark_read(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    notif = db.query(Notification).filter(
+        Notification.id == notification_id,
+        Notification.user_id == current_user.id,
+    ).first()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification non trouvée")
+    notif.is_read = True
+    db.commit()
+    return {"ok": True}
+
+
+@router.patch("/notifications/read-all")
+def mark_all_read(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.is_read == False,
+    ).update({"is_read": True})
+    db.commit()
+    return {"ok": True}

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func as sa_func
 from typing import Optional
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 import uuid
 
@@ -278,3 +279,110 @@ def convert_estimate_to_invoice(
     db.commit()
     db.refresh(invoice)
     return invoice
+
+
+# ─── Statistics ─────────────────────────────────────────────────────
+
+@router.get("/stats")
+def get_stats(
+    period: str = Query("day", description="day, week, month"),
+    date_ref: Optional[date] = Query(None, description="Reference date"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return billing stats for a given period.
+
+    Returns:
+    - current period totals (revenue, paid, unpaid, count)
+    - previous period totals for comparison
+    - daily breakdown for chart
+    """
+    ref = date_ref or date.today()
+
+    if period == "day":
+        start = ref
+        end = ref
+        prev_start = ref - timedelta(days=1)
+        prev_end = ref - timedelta(days=1)
+    elif period == "week":
+        start = ref - timedelta(days=ref.weekday())  # Monday
+        end = start + timedelta(days=6)
+        prev_start = start - timedelta(days=7)
+        prev_end = end - timedelta(days=7)
+    else:  # month
+        start = ref.replace(day=1)
+        if ref.month == 12:
+            end = ref.replace(year=ref.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            end = ref.replace(month=ref.month + 1, day=1) - timedelta(days=1)
+        prev_start = (start - timedelta(days=1)).replace(day=1)
+        prev_end = start - timedelta(days=1)
+
+    def _period_stats(d_start, d_end):
+        invoices = db.query(Invoice).filter(
+            Invoice.issue_date >= d_start,
+            Invoice.issue_date <= d_end,
+        ).all()
+
+        total_revenue = sum(float(inv.total or 0) for inv in invoices)
+        total_paid = sum(float(inv.amount_paid or 0) for inv in invoices)
+        total_unpaid = total_revenue - total_paid
+        count = len(invoices)
+        paid_count = sum(1 for inv in invoices if inv.status == InvoiceStatus.PAID)
+
+        # Breakdown by status
+        by_status = {}
+        for inv in invoices:
+            s = inv.status.value if hasattr(inv.status, 'value') else str(inv.status)
+            by_status[s] = by_status.get(s, 0) + float(inv.total or 0)
+
+        return {
+            "total_revenue": round(total_revenue, 2),
+            "total_paid": round(total_paid, 2),
+            "total_unpaid": round(total_unpaid, 2),
+            "invoice_count": count,
+            "paid_count": paid_count,
+            "by_status": by_status,
+        }
+
+    current_stats = _period_stats(start, end)
+    previous_stats = _period_stats(prev_start, prev_end)
+
+    # Daily breakdown for chart
+    daily = []
+    day_cursor = start
+    while day_cursor <= end:
+        day_invoices = db.query(Invoice).filter(
+            Invoice.issue_date == day_cursor,
+        ).all()
+        day_revenue = sum(float(inv.total or 0) for inv in day_invoices)
+        day_paid = sum(float(inv.amount_paid or 0) for inv in day_invoices)
+        daily.append({
+            "date": day_cursor.isoformat(),
+            "revenue": round(day_revenue, 2),
+            "paid": round(day_paid, 2),
+            "count": len(day_invoices),
+        })
+        day_cursor += timedelta(days=1)
+
+    # Payment methods breakdown
+    payments = db.query(Payment).filter(
+        Payment.payment_date >= start,
+        Payment.payment_date <= end,
+    ).all()
+    by_payment_method = {}
+    for p in payments:
+        method = p.payment_method or "other"
+        by_payment_method[method] = round(
+            by_payment_method.get(method, 0) + float(p.amount or 0), 2
+        )
+
+    return {
+        "period": period,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "current": current_stats,
+        "previous": previous_stats,
+        "daily": daily,
+        "by_payment_method": by_payment_method,
+    }
