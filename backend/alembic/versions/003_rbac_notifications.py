@@ -8,8 +8,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect as sa_inspect
 
-revision = '003'
-down_revision = '002'
+revision = '003_rbac_notifications'
+down_revision = '002_medical_home_treatment'
 branch_labels = None
 depends_on = None
 
