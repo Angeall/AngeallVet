@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { clientsAPI, inventoryAPI, billingAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function SalesPage() {
+  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [lines, setLines] = useState([]);
 
@@ -70,7 +72,7 @@ export default function SalesPage() {
     if (!selectedClient) { toast.error('Selectionnez un client'); return; }
     if (lines.length === 0) { toast.error('Ajoutez au moins un produit'); return; }
     try {
-      await billingAPI.createInvoice({
+      const res = await billingAPI.createInvoice({
         client_id: selectedClient.id,
         animal_id: null,
         status: 'paid',
@@ -82,9 +84,7 @@ export default function SalesPage() {
         })),
       });
       toast.success('Vente enregistree');
-      setLines([]);
-      setSelectedClient(null);
-      setClientSearch('');
+      navigate(`/invoices/${res.data.id}`);
     } catch {
       toast.error('Erreur lors de l\'enregistrement');
     }
