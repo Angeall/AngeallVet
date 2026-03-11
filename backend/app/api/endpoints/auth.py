@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from gotrue.errors import AuthApiError
 from typing import Optional
 
-from app.core.database import get_db
+from app.core.database import get_central_db
 from app.core.security import get_current_user, require_roles
 from app.core.supabase import get_supabase_admin
 from app.models.user import User, UserRole, RolePermission, Notification, DEFAULT_PERMISSIONS
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
-def register(data: UserCreate, db: Session = Depends(get_db)):
+def register(data: UserCreate, db: Session = Depends(get_central_db)):
     """Register a new user: creates Supabase auth account + local profile."""
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email déjà utilisé")
@@ -52,7 +52,7 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+def login(data: LoginRequest, db: Session = Depends(get_central_db)):
     """Authenticate via Supabase and return tokens."""
     supabase = get_supabase_admin()
     try:
@@ -84,7 +84,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
+def refresh_token(refresh_token: str, db: Session = Depends(get_central_db)):
     """Refresh tokens via Supabase."""
     supabase = get_supabase_admin()
     try:
@@ -114,7 +114,7 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 @router.get("/users", response_model=list[UserResponse])
 def list_users(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     return db.query(User).all()
@@ -124,7 +124,7 @@ def list_users(
 def update_user(
     user_id: int,
     data: UserUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     user = db.query(User).filter(User.id == user_id).first()
@@ -156,7 +156,7 @@ def update_user(
 
 @router.get("/permissions", response_model=list[RolePermissionResponse])
 def list_permissions(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get permissions for all roles. Returns DB-stored overrides or defaults."""
@@ -175,7 +175,7 @@ def list_permissions(
 
 @router.get("/permissions/me")
 def my_permissions(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get current user's permissions."""
@@ -192,7 +192,7 @@ def my_permissions(
 def update_permissions(
     role: str,
     data: RolePermissionUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     """Update permissions for a role (admin only)."""
@@ -219,7 +219,7 @@ def update_permissions(
 def list_notifications(
     unread_only: bool = Query(False),
     limit: int = Query(20),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
@@ -230,7 +230,7 @@ def list_notifications(
 
 @router.get("/notifications/unread-count")
 def unread_count(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(get_current_user),
 ):
     count = db.query(Notification).filter(
@@ -243,7 +243,7 @@ def unread_count(
 @router.patch("/notifications/{notification_id}/read")
 def mark_read(
     notification_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(get_current_user),
 ):
     notif = db.query(Notification).filter(
@@ -259,7 +259,7 @@ def mark_read(
 
 @router.patch("/notifications/read-all")
 def mark_all_read(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_central_db),
     current_user: User = Depends(get_current_user),
 ):
     db.query(Notification).filter(
@@ -274,7 +274,7 @@ def mark_all_read(
 # Tenants live in the CENTRAL database (not tenant DBs).
 # We use get_central_db here explicitly.
 
-from app.core.database import get_central_db, init_tenant_database
+from app.core.database import init_tenant_database
 
 
 @router.get("/tenants")
