@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-from app.core.database import engine, Base
+from app.core.database import Base, _default_engine as engine
 from app.api.endpoints import (
     auth, clients, animals, appointments,
     medical, inventory, billing, communication, hospitalization,
