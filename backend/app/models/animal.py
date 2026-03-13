@@ -26,6 +26,12 @@ class Sex(str, enum.Enum):
     UNKNOWN = "unknown"
 
 
+class VitalStatus(str, enum.Enum):
+    ALIVE = "alive"
+    LOST = "lost"
+    DECEASED = "deceased"
+
+
 class Animal(Base):
     __tablename__ = "animals"
 
@@ -40,6 +46,8 @@ class Animal(Base):
     microchip_number = Column(String(50), unique=True, index=True)
     tattoo_number = Column(String(50), index=True)
     is_neutered = Column(Boolean, default=False)
+    vital_status = Column(SAEnum(VitalStatus), nullable=False, default=VitalStatus.ALIVE)
+    vital_status_date = Column(Date)
     is_deceased = Column(Boolean, default=False)
     deceased_date = Column(Date)
     photo_url = Column(String(500))

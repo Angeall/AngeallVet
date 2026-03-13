@@ -54,7 +54,8 @@ export default function AnimalDetailPage() {
         name: aRes.data.name, species: aRes.data.species, breed: aRes.data.breed || '',
         sex: aRes.data.sex, date_of_birth: aRes.data.date_of_birth || '', color: aRes.data.color || '',
         microchip_number: aRes.data.microchip_number || '', tattoo_number: aRes.data.tattoo_number || '',
-        is_neutered: aRes.data.is_neutered, notes: aRes.data.notes || '',
+        is_neutered: aRes.data.is_neutered, vital_status: aRes.data.vital_status || 'alive',
+        vital_status_date: aRes.data.vital_status_date || '', notes: aRes.data.notes || '',
       });
     } catch { toast.error('Erreur de chargement'); }
   };
@@ -129,7 +130,7 @@ export default function AnimalDetailPage() {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      await animalsAPI.update(id, { ...editForm, date_of_birth: editForm.date_of_birth || null, microchip_number: editForm.microchip_number || null, tattoo_number: editForm.tattoo_number || null, notes: editForm.notes || null });
+      await animalsAPI.update(id, { ...editForm, date_of_birth: editForm.date_of_birth || null, microchip_number: editForm.microchip_number || null, tattoo_number: editForm.tattoo_number || null, vital_status_date: editForm.vital_status_date || null, is_deceased: editForm.vital_status === 'deceased', notes: editForm.notes || null });
       toast.success('Animal mis a jour'); setShowEditForm(false); load();
     } catch { toast.error('Erreur'); }
   };
@@ -156,6 +157,8 @@ export default function AnimalDetailPage() {
 
   const alertTypeLabels = { allergy: 'Allergie', aggressive: 'Agressif', chronic: 'Maladie chronique', medication: 'Medicament', other: 'Autre' };
   const severityLabels = { danger: 'Danger', warning: 'Attention', info: 'Information' };
+  const vitalStatusLabels = { alive: 'Vivant', lost: 'Perdu', deceased: 'Decede' };
+  const vitalStatusColors = { alive: 'green', lost: 'purple', deceased: 'red' };
   const weightChartData = [...weights].reverse().map(w => ({ date: new Date(w.recorded_at).toLocaleDateString('fr-FR'), poids: parseFloat(w.weight_kg) }));
   const recordTypeLabel = { consultation: 'Consultation', vaccination: 'Vaccination', surgery: 'Chirurgie', lab_result: 'Labo', imaging: 'Imagerie', note: 'Note' };
 
@@ -165,6 +168,7 @@ export default function AnimalDetailPage() {
         <div className="page-header-left">
           <Link to="/animals" className="breadcrumb-link">Animaux /</Link>
           <h1 className="page-title">{animal.name}</h1>
+          <span className={`badge badge-${vitalStatusColors[animal.vital_status] || 'green'}`} style={{ marginLeft: '8px' }}>{vitalStatusLabels[animal.vital_status] || 'Vivant'}</span>
           {animal.client_id && <Link to={`/clients/${animal.client_id}`} className="breadcrumb-link" style={{ marginLeft: '12px', fontSize: '0.85rem' }}>Voir le client</Link>}
         </div>
         <div className="page-header-actions" style={{ display: 'flex', gap: '8px' }}>
@@ -179,6 +183,13 @@ export default function AnimalDetailPage() {
           )}
         </div>
       </div>
+
+      {animal.vital_status && animal.vital_status !== 'alive' && (
+        <div className={`alert-banner ${animal.vital_status === 'deceased' ? 'danger' : 'warning'}`}>
+          {vitalStatusLabels[animal.vital_status] || animal.vital_status}
+          {animal.vital_status_date && ` - ${new Date(animal.vital_status_date + 'T00:00').toLocaleDateString('fr-FR')}`}
+        </div>
+      )}
 
       {activeHosp && (
         <Link to={`/hospitalization/${activeHosp.id}`} style={{ textDecoration: 'none' }}>
@@ -275,6 +286,22 @@ export default function AnimalDetailPage() {
               <div className="form-group"><label className="form-label">N Tatouage</label><input className="form-input" value={editForm.tattoo_number} onChange={(e) => setEditForm({ ...editForm, tattoo_number: e.target.value })} /></div>
               <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}><label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><input type="checkbox" checked={editForm.is_neutered} onChange={(e) => setEditForm({ ...editForm, is_neutered: e.target.checked })} />Sterilise</label></div>
             </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Statut vital</label>
+                <select className="form-select" value={editForm.vital_status} onChange={(e) => setEditForm({ ...editForm, vital_status: e.target.value, vital_status_date: e.target.value !== 'alive' ? (editForm.vital_status_date || new Date().toISOString().slice(0, 10)) : '' })}>
+                  <option value="alive">Vivant</option>
+                  <option value="lost">Perdu</option>
+                  <option value="deceased">Decede</option>
+                </select>
+              </div>
+              {editForm.vital_status !== 'alive' && (
+                <div className="form-group">
+                  <label className="form-label">Date du changement</label>
+                  <input type="date" className="form-input" value={editForm.vital_status_date} onChange={(e) => setEditForm({ ...editForm, vital_status_date: e.target.value })} />
+                </div>
+              )}
+            </div>
             <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Notes sur l'animal..." /></div>
             <button type="submit" className="btn btn-primary">Enregistrer</button>
           </form>
@@ -283,6 +310,7 @@ export default function AnimalDetailPage() {
             <div className="form-row">
               <div><strong>Espece:</strong> {animal.species}</div><div><strong>Race:</strong> {animal.breed || '-'}</div><div><strong>Sexe:</strong> {animal.sex}</div><div><strong>Ne(e) le:</strong> {animal.date_of_birth || '-'}</div>
               <div><strong>Couleur:</strong> {animal.color || '-'}</div><div><strong>Sterilise:</strong> {animal.is_neutered ? 'Oui' : 'Non'}</div><div><strong>Puce:</strong> {animal.microchip_number || '-'}</div><div><strong>Tatouage:</strong> {animal.tattoo_number || '-'}</div>
+              <div><strong>Statut:</strong> <span className={`badge badge-${vitalStatusColors[animal.vital_status] || 'green'}`}>{vitalStatusLabels[animal.vital_status] || 'Vivant'}</span>{animal.vital_status_date && ` (${new Date(animal.vital_status_date + 'T00:00').toLocaleDateString('fr-FR')})`}</div>
             </div>
             {animal.notes && <div style={{ marginTop: '12px' }}><strong>Notes:</strong> <span style={{ whiteSpace: 'pre-wrap' }}>{animal.notes}</span></div>}
           </>

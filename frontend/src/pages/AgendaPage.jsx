@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { appointmentsAPI, clientsAPI, animalsAPI, authAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -28,10 +28,14 @@ export default function AgendaPage() {
   const [selectedAnimal, setSelectedAnimal] = useState(null);
   const [vets, setVets] = useState([]);
 
+  // Quick client creation modal
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [clientForm, setClientForm] = useState({ first_name: '', last_name: '', phone: '', email: '' });
+
   useEffect(() => {
     async function loadVets() {
       try {
-        const res = await authAPI.listUsers();
+        const res = await authAPI.listStaff();
         setVets((res.data || []).filter(u => u.role === 'veterinarian' || u.role === 'admin'));
       } catch {}
     }
@@ -62,7 +66,7 @@ export default function AgendaPage() {
 
   const selectClient = async (client) => {
     setSelectedClient(client);
-    setForm({ ...form, client_id: client.id });
+    setForm(prev => ({ ...prev, client_id: client.id }));
     setClientSearch(`${client.last_name} ${client.first_name}`);
     setClientResults([]);
     // Load client's animals
@@ -74,7 +78,7 @@ export default function AgendaPage() {
 
   const selectAnimal = (animal) => {
     setSelectedAnimal(animal);
-    setForm({ ...form, animal_id: animal.id });
+    setForm(prev => ({ ...prev, animal_id: animal.id }));
   };
 
   const handleSubmit = async (e) => {
@@ -97,6 +101,20 @@ export default function AgendaPage() {
     } catch { toast.error('Erreur lors de la creation'); }
   };
 
+  const handleCreateClient = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await clientsAPI.create(clientForm);
+      toast.success('Client cree');
+      setShowClientModal(false);
+      setClientForm({ first_name: '', last_name: '', phone: '', email: '' });
+      // Auto-select the new client
+      selectClient(res.data);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur lors de la creation du client');
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -116,13 +134,17 @@ export default function AgendaPage() {
             <div className="form-row">
               <div className="form-group" style={{ position: 'relative' }}>
                 <label className="form-label">Client *</label>
-                <input
-                  className="form-input"
-                  placeholder="Rechercher un client..."
-                  value={clientSearch}
-                  onChange={(e) => { setClientSearch(e.target.value); setSelectedClient(null); setForm({ ...form, client_id: '' }); }}
-                  required={!selectedClient}
-                />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    className="form-input"
+                    placeholder="Rechercher un client..."
+                    value={clientSearch}
+                    onChange={(e) => { setClientSearch(e.target.value); setSelectedClient(null); setForm(prev => ({ ...prev, client_id: '' })); }}
+                    required={!selectedClient}
+                    style={{ flex: 1 }}
+                  />
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowClientModal(true)} title="Creer un nouveau client">+ Client</button>
+                </div>
                 {clientResults.length > 0 && !selectedClient && (
                   <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: 'white', border: '1px solid var(--gray-200)', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
                     {clientResults.map(c => (
@@ -140,7 +162,7 @@ export default function AgendaPage() {
                 <label className="form-label">Animal {selectedClient ? '*' : ''}</label>
                 <select className="form-select" value={form.animal_id} onChange={(e) => {
                   const a = animalOptions.find(an => an.id === parseInt(e.target.value));
-                  if (a) selectAnimal(a); else { setSelectedAnimal(null); setForm({ ...form, animal_id: '' }); }
+                  if (a) selectAnimal(a); else { setSelectedAnimal(null); setForm(prev => ({ ...prev, animal_id: '' })); }
                 }}>
                   <option value="">-- Choisir --</option>
                   {animalOptions.map(a => <option key={a.id} value={a.id}>{a.name} ({a.species})</option>)}
@@ -148,7 +170,7 @@ export default function AgendaPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Veterinaire *</label>
-                <select className="form-select" value={form.veterinarian_id} onChange={(e) => setForm({ ...form, veterinarian_id: e.target.value })} required>
+                <select className="form-select" value={form.veterinarian_id} onChange={(e) => setForm(prev => ({ ...prev, veterinarian_id: e.target.value }))} required>
                   <option value="">-- Choisir --</option>
                   {vets.map(v => <option key={v.id} value={v.id}>Dr. {v.last_name} {v.first_name}</option>)}
                 </select>
@@ -157,28 +179,63 @@ export default function AgendaPage() {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Type</label>
-                <select className="form-select" value={form.appointment_type} onChange={(e) => setForm({ ...form, appointment_type: e.target.value })}>
+                <select className="form-select" value={form.appointment_type} onChange={(e) => setForm(prev => ({ ...prev, appointment_type: e.target.value }))}>
                   {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Debut *</label>
-                <input type="datetime-local" className="form-input" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} required />
+                <input type="datetime-local" className="form-input" value={form.start_time} onChange={(e) => setForm(prev => ({ ...prev, start_time: e.target.value }))} required />
               </div>
               <div className="form-group">
                 <label className="form-label">Fin *</label>
-                <input type="datetime-local" className="form-input" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} required />
+                <input type="datetime-local" className="form-input" value={form.end_time} onChange={(e) => setForm(prev => ({ ...prev, end_time: e.target.value }))} required />
               </div>
             </div>
             <div className="form-group">
               <label className="form-label">Motif</label>
-              <input className="form-input" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+              <input className="form-input" value={form.reason} onChange={(e) => setForm(prev => ({ ...prev, reason: e.target.value }))} />
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button type="submit" className="btn btn-primary">Creer</button>
               <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Quick client creation modal */}
+      {showClientModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) setShowClientModal(false); }}>
+          <div className="card" style={{ width: '480px', maxWidth: '90vw', margin: 0 }}>
+            <h3 className="card-title" style={{ marginBottom: '16px' }}>Nouveau client</h3>
+            <form onSubmit={handleCreateClient}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Prenom *</label>
+                  <input className="form-input" value={clientForm.first_name} onChange={(e) => setClientForm({ ...clientForm, first_name: e.target.value })} required autoFocus />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Nom *</label>
+                  <input className="form-input" value={clientForm.last_name} onChange={(e) => setClientForm({ ...clientForm, last_name: e.target.value })} required />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Telephone</label>
+                  <input className="form-input" value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email</label>
+                  <input type="email" className="form-input" value={clientForm.email} onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowClientModal(false)}>Annuler</button>
+                <button type="submit" className="btn btn-primary">Creer et selectionner</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

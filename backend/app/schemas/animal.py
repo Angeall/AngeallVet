@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
-from app.models.animal import Species, Sex
+from app.models.animal import Species, Sex, VitalStatus
 
 
 class AnimalAlertResponse(BaseModel):
@@ -62,6 +62,8 @@ class AnimalUpdate(BaseModel):
     microchip_number: Optional[str] = None
     tattoo_number: Optional[str] = None
     is_neutered: Optional[bool] = None
+    vital_status: Optional[VitalStatus] = None
+    vital_status_date: Optional[date] = None
     is_deceased: Optional[bool] = None
     deceased_date: Optional[date] = None
     notes: Optional[str] = None
@@ -70,6 +72,8 @@ class AnimalUpdate(BaseModel):
 class AnimalResponse(AnimalBase):
     id: int
     client_id: int
+    vital_status: VitalStatus = VitalStatus.ALIVE
+    vital_status_date: Optional[date] = None
     is_deceased: bool
     photo_url: Optional[str] = None
     created_at: datetime
