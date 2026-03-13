@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-from app.core.database import Base, _default_engine as engine
+from app.core.database import Base, _default_engine as engine, _default_session_factory
 from app.api.endpoints import (
     auth, clients, animals, appointments,
     medical, inventory, billing, communication, hospitalization,
@@ -49,10 +49,39 @@ if not os.path.exists(upload_dir):
 app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
 
 
+def _ensure_schema(db_engine):
+    """Ensure all tables and columns exist in the given database.
+
+    create_all only creates missing tables — it won't ALTER existing ones.
+    So we also run raw DDL for recently added columns that may be missing
+    on databases that existed before the model change.
+    """
+    from sqlalchemy import text, inspect
+
+    Base.metadata.create_all(bind=db_engine)
+
+    # Column additions that create_all won't handle for pre-existing tables.
+    # Each entry: (table, column, DDL to add it).
+    _pending_columns = [
+        ("animals", "vital_status", "ALTER TABLE animals ADD COLUMN vital_status VARCHAR(20) NOT NULL DEFAULT 'alive'"),
+        ("animals", "vital_status_date", "ALTER TABLE animals ADD COLUMN vital_status_date DATE"),
+    ]
+    with db_engine.connect() as conn:
+        inspector = inspect(db_engine)
+        for table, column, ddl in _pending_columns:
+            if table not in inspector.get_table_names():
+                continue
+            existing = [c["name"] for c in inspector.get_columns(table)]
+            if column not in existing:
+                conn.execute(text(ddl))
+                logger.info("Added missing column %s.%s", table, column)
+        conn.commit()
+
+
 @app.on_event("startup")
 def on_startup():
-    # Create tables that don't exist yet
-    Base.metadata.create_all(bind=engine)
+    # Ensure central database schema is up to date
+    _ensure_schema(engine)
 
     # Run Alembic migrations for schema changes on existing tables
     from alembic.config import Config
@@ -66,6 +95,25 @@ def on_startup():
             logger.info("Database migrations applied successfully")
         except Exception as e:
             logger.warning("Migration warning: %s", e)
+
+    # Ensure tenant databases also have the latest schema
+    from sqlalchemy import create_engine as _ce
+    try:
+        central = _default_session_factory()
+        from app.models.tenant import Tenant
+        tenants = central.query(Tenant).filter(Tenant.is_active == True).all()
+        for t in tenants:
+            if t.database_url:
+                try:
+                    tenant_engine = _ce(t.database_url, pool_pre_ping=True)
+                    _ensure_schema(tenant_engine)
+                    tenant_engine.dispose()
+                    logger.info("Schema updated for tenant %s", t.slug)
+                except Exception as e:
+                    logger.warning("Failed to update schema for tenant %s: %s", t.slug, e)
+        central.close()
+    except Exception as e:
+        logger.warning("Could not update tenant schemas: %s", e)
 
     # Warn loudly about missing Supabase configuration
     missing = []
