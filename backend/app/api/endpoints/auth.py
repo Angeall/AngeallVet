@@ -120,6 +120,24 @@ def list_users(
     return db.query(User).all()
 
 
+@router.get("/staff", response_model=list[UserResponse])
+def list_staff(
+    db: Session = Depends(get_central_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List active staff (admins, vets, assistants). Available to all authenticated
+    users so that vets/assistants can assign or reassign appointments."""
+    return (
+        db.query(User)
+        .filter(
+            User.is_active == True,
+            User.role.in_([UserRole.ADMIN, UserRole.VETERINARIAN, UserRole.ASSISTANT]),
+        )
+        .order_by(User.last_name, User.first_name)
+        .all()
+    )
+
+
 @router.put("/users/{user_id}", response_model=UserResponse)
 def update_user(
     user_id: int,

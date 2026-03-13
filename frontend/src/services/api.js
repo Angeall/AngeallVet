@@ -36,6 +36,7 @@ api.interceptors.response.use(
 export const authAPI = {
   me: () => api.get('/auth/me'),
   listUsers: () => api.get('/auth/users'),
+  listStaff: () => api.get('/auth/staff'),
   updateUser: (id, data) => api.put(`/auth/users/${id}`, data),
   register: (data) => api.post('/auth/register', data),
   // Permissions

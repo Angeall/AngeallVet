@@ -11,12 +11,27 @@ const roleColors = {
   admin: 'red', veterinarian: 'green', assistant: 'blue', accountant: 'purple', guest: 'gray',
 };
 
+const permissionModules = [
+  'dashboard', 'clients', 'animals', 'agenda', 'waiting_room', 'medical',
+  'inventory', 'invoices', 'estimates', 'sales', 'hospitalization',
+  'communications', 'users', 'stats',
+];
+
 const permissionLabels = {
   dashboard: 'Tableau de bord', clients: 'Clients', animals: 'Animaux',
   agenda: 'Agenda', waiting_room: "Salle d'attente", medical: 'Dossiers medicaux',
   inventory: 'Stocks & Pharmacie', invoices: 'Factures', estimates: 'Devis',
   sales: 'Vente comptoir', hospitalization: 'Hospitalisation',
   communications: 'Communications', users: 'Utilisateurs', stats: 'Statistiques',
+};
+
+// Fallback defaults matching backend DEFAULT_PERMISSIONS
+const DEFAULT_PERMISSIONS = {
+  admin: Object.fromEntries(permissionModules.map(m => [m, true])),
+  veterinarian: Object.fromEntries(permissionModules.map(m => [m, m !== 'users'])),
+  assistant: Object.fromEntries(permissionModules.map(m => [m, m !== 'users' && m !== 'medical' && m !== 'stats'])),
+  accountant: Object.fromEntries(permissionModules.map(m => [m, ['dashboard', 'clients', 'inventory', 'invoices', 'estimates', 'sales', 'stats'].includes(m)])),
+  guest: Object.fromEntries(permissionModules.map(m => [m, ['dashboard', 'agenda', 'waiting_room'].includes(m)])),
 };
 
 export default function UsersPage() {
@@ -42,11 +57,15 @@ export default function UsersPage() {
   const loadPermissions = async () => {
     try {
       const res = await authAPI.listPermissions();
-      const edits = {};
-      res.data.forEach(p => { edits[p.role] = { ...p.permissions }; });
+      const edits = { ...DEFAULT_PERMISSIONS };
+      res.data.forEach(p => { edits[p.role] = { ...DEFAULT_PERMISSIONS[p.role], ...p.permissions }; });
       setEditingPerms(edits);
       setPermsDirty({});
-    } catch {}
+    } catch {
+      // API failed — use hardcoded defaults so the matrix still renders
+      setEditingPerms({ ...DEFAULT_PERMISSIONS });
+      setPermsDirty({});
+    }
   };
 
   useEffect(() => {
@@ -88,10 +107,10 @@ export default function UsersPage() {
   };
 
   const togglePermission = (role, perm) => {
-    setEditingPerms(prev => ({
-      ...prev,
-      [role]: { ...prev[role], [perm]: !prev[role][perm] },
-    }));
+    setEditingPerms(prev => {
+      const current = prev[role] || DEFAULT_PERMISSIONS[role] || {};
+      return { ...prev, [role]: { ...current, [perm]: !current[perm] } };
+    });
     setPermsDirty(prev => ({ ...prev, [role]: true }));
   };
 
