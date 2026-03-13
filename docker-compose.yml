@@ -38,11 +38,12 @@ services:
       - "3000:3000"
     volumes:
       - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.js:/app/vite.config.js
     environment:
-      - REACT_APP_API_URL=http://localhost:8000/api/v1
-      - REACT_APP_SUPABASE_URL=${SUPABASE_URL}
-      - REACT_APP_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - VITE_API_URL=http://localhost:8000/api/v1
+      - VITE_SUPABASE_URL=${SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     depends_on:
       - backend
 
