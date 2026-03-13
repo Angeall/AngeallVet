@@ -33,6 +33,7 @@ class Product(Base):
     ean13 = Column(String(13))
     notes = Column(Text)
     requires_prescription = Column(Boolean, default=False)
+    is_shortcut = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     supplier_id = Column(Integer, ForeignKey("suppliers.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

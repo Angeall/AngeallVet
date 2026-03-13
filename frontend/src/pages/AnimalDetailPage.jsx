@@ -25,16 +25,8 @@ export default function AnimalDetailPage() {
   const [alertForm, setAlertForm] = useState({ alert_type: 'allergy', message: '', severity: 'warning' });
   const [editForm, setEditForm] = useState({});
   const [products, setProducts] = useState([]);
+  const [shortcuts, setShortcuts] = useState([]);
   const [invoiceLines, setInvoiceLines] = useState([{ description: '', quantity: '1', unit_price: '', vat_rate: '20.00', product_id: null }]);
-
-  const defaultPrices = [
-    { label: 'Consultation', price: '40.00', vat: '20.00' },
-    { label: 'Vaccination', price: '55.00', vat: '20.00' },
-    { label: 'Detartrage', price: '120.00', vat: '20.00' },
-    { label: 'Sterilisation chat', price: '150.00', vat: '20.00' },
-    { label: 'Sterilisation chien', price: '250.00', vat: '20.00' },
-    { label: 'Analyse sanguine', price: '85.00', vat: '20.00' },
-  ];
 
   const load = async () => {
     try {
@@ -63,7 +55,14 @@ export default function AnimalDetailPage() {
   useEffect(() => { load(); }, [id]);
 
   const loadProducts = async () => {
-    try { const res = await inventoryAPI.listProducts({}); setProducts(res.data || []); } catch {}
+    try {
+      const [pRes, sRes] = await Promise.all([
+        inventoryAPI.listProducts({}),
+        inventoryAPI.getShortcuts(),
+      ]);
+      setProducts(pRes.data || []);
+      setShortcuts(sRes.data || []);
+    } catch {}
   };
 
   const addWeight = async (e) => {
@@ -138,7 +137,6 @@ export default function AnimalDetailPage() {
   const addInvoiceLine = () => setInvoiceLines([...invoiceLines, { description: '', quantity: '1', unit_price: '', vat_rate: '20.00', product_id: null }]);
   const removeInvoiceLine = (idx) => { if (invoiceLines.length > 1) setInvoiceLines(invoiceLines.filter((_, i) => i !== idx)); };
   const updateInvoiceLine = (idx, field, value) => { const l = [...invoiceLines]; l[idx][field] = value; setInvoiceLines(l); };
-  const addDefaultPrice = (dp) => { setInvoiceLines([...invoiceLines.filter(l => l.description), { description: dp.label, quantity: '1', unit_price: dp.price, vat_rate: dp.vat, product_id: null }]); };
   const addProductLine = (product) => { setInvoiceLines([...invoiceLines.filter(l => l.description), { description: product.name, quantity: '1', unit_price: parseFloat(product.selling_price).toFixed(2), vat_rate: parseFloat(product.vat_rate).toFixed(2), product_id: product.id }]); };
 
   const handleInvoiceSubmit = async (e) => {
@@ -213,9 +211,11 @@ export default function AnimalDetailPage() {
       {showInvoiceForm && (
         <div className="card">
           <h3 className="card-title" style={{ marginBottom: '16px' }}>Facturation rapide - {animal.name}</h3>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
-            {defaultPrices.map((dp, i) => (<button key={i} type="button" className="btn btn-secondary btn-sm" onClick={() => addDefaultPrice(dp)}>{dp.label} ({dp.price} EUR)</button>))}
-          </div>
+          {shortcuts.length > 0 && (
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+              {shortcuts.map((s) => (<button key={s.id} type="button" className="btn btn-secondary btn-sm" onClick={() => addProductLine(s)}>{s.name} ({parseFloat(s.selling_price).toFixed(2)} EUR)</button>))}
+            </div>
+          )}
           {products.length > 0 && (
             <div style={{ marginBottom: '12px' }}><label className="form-label">Ajouter un produit:</label>
               <select className="form-select" onChange={(e) => { const p = products.find(pr => pr.id === parseInt(e.target.value)); if (p) addProductLine(p); e.target.value = ''; }}>

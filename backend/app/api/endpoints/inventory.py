@@ -227,6 +227,20 @@ def create_purchase_order(
     return order
 
 
+@router.get("/shortcuts", response_model=list[ProductResponse])
+def get_shortcuts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Products flagged as shortcuts for quick billing buttons."""
+    return (
+        db.query(Product)
+        .filter(Product.is_active == True, Product.is_shortcut == True)
+        .order_by(Product.name)
+        .all()
+    )
+
+
 @router.get("/alerts", response_model=list[ProductResponse])
 def get_stock_alerts(
     db: Session = Depends(get_db),

@@ -28,6 +28,13 @@ export default function InventoryPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const toggleShortcut = async (product) => {
+    try {
+      await inventoryAPI.updateProduct(product.id, { is_shortcut: !product.is_shortcut });
+      setProducts(products.map(p => p.id === product.id ? { ...p, is_shortcut: !p.is_shortcut } : p));
+    } catch { toast.error('Erreur'); }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -135,6 +142,7 @@ export default function InventoryPage() {
                 <th>TVA</th>
                 <th>Stock</th>
                 <th>Seuil</th>
+                <th style={{ textAlign: 'center' }}>Raccourci</th>
               </tr>
             </thead>
             <tbody>
@@ -149,15 +157,22 @@ export default function InventoryPage() {
                   <td>{parseFloat(p.selling_price).toFixed(2)} EUR</td>
                   <td>{parseFloat(p.vat_rate).toFixed(0)}%</td>
                   <td>
-                    <span className={`badge ${parseFloat(p.stock_quantity) <= parseFloat(p.stock_alert_threshold) ? 'badge-red' : 'badge-green'}`}>
-                      {parseFloat(p.stock_quantity)} {p.unit || ''}
-                    </span>
+                    {p.product_type === 'service' ? (
+                      <span className="badge badge-blue">&#8734;</span>
+                    ) : (
+                      <span className={`badge ${parseFloat(p.stock_quantity) <= parseFloat(p.stock_alert_threshold) ? 'badge-red' : 'badge-green'}`}>
+                        {parseFloat(p.stock_quantity)} {p.unit || ''}
+                      </span>
+                    )}
                   </td>
-                  <td>{parseFloat(p.stock_alert_threshold)}</td>
+                  <td>{p.product_type === 'service' ? '-' : parseFloat(p.stock_alert_threshold)}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <input type="checkbox" checked={!!p.is_shortcut} onChange={() => toggleShortcut(p)} title="Afficher comme raccourci facturation" />
+                  </td>
                 </tr>
               ))}
               {products.length === 0 && (
-                <tr><td colSpan="8" className="table-empty">Aucun produit trouve</td></tr>
+                <tr><td colSpan="9" className="table-empty">Aucun produit trouve</td></tr>
               )}
             </tbody>
           </table>

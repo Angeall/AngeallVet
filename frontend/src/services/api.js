@@ -109,6 +109,7 @@ export const inventoryAPI = {
   listSuppliers: () => api.get('/inventory/suppliers'),
   createSupplier: (data) => api.post('/inventory/suppliers', data),
   createPurchaseOrder: (data) => api.post('/inventory/purchase-orders', data),
+  getShortcuts: () => api.get('/inventory/shortcuts'),
 };
 
 // Billing

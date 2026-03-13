@@ -1,8 +1,9 @@
 import logging
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
@@ -29,6 +30,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch unhandled exceptions so they return a proper JSON response
+    that passes through the CORS middleware (instead of a bare 500)."""
+    logger.exception("Unhandled error on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Erreur interne du serveur"},
+    )
+
 
 # API routes
 API_PREFIX = "/api/v1"
@@ -65,6 +78,7 @@ def _ensure_schema(db_engine):
     _pending_columns = [
         ("animals", "vital_status", "ALTER TABLE animals ADD COLUMN vital_status VARCHAR(20) NOT NULL DEFAULT 'alive'"),
         ("animals", "vital_status_date", "ALTER TABLE animals ADD COLUMN vital_status_date DATE"),
+        ("products", "is_shortcut", "ALTER TABLE products ADD COLUMN is_shortcut BOOLEAN NOT NULL DEFAULT false"),
     ]
     with db_engine.connect() as conn:
         inspector = inspect(db_engine)

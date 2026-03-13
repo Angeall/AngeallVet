@@ -57,6 +57,7 @@ class ProductBase(BaseModel):
     ean13: Optional[str] = None
     notes: Optional[str] = None
     requires_prescription: bool = False
+    is_shortcut: bool = False
     supplier_id: Optional[int] = None
 
 
@@ -75,6 +76,7 @@ class ProductUpdate(BaseModel):
     vat_rate: Optional[Decimal] = None
     stock_alert_threshold: Optional[Decimal] = None
     requires_prescription: Optional[bool] = None
+    is_shortcut: Optional[bool] = None
     is_active: Optional[bool] = None
     supplier_id: Optional[int] = None
 
@@ -82,6 +84,7 @@ class ProductUpdate(BaseModel):
 class ProductResponse(ProductBase):
     id: int
     stock_quantity: Decimal
+    is_shortcut: bool = False
     is_active: bool
     lots: List[ProductLotResponse] = []
     created_at: datetime
