@@ -94,10 +94,14 @@ def _ensure_schema(db_engine):
 
 @app.on_event("startup")
 def on_startup():
-    # Ensure central database schema is up to date
-    _ensure_schema(engine)
+    # 1. Ensure central database schema is up to date (tables + missing columns)
+    try:
+        _ensure_schema(engine)
+        logger.info("Central database schema verified")
+    except Exception as e:
+        logger.error("Failed to ensure central schema: %s", e)
 
-    # Run Alembic migrations for schema changes on existing tables
+    # 2. Run Alembic migrations
     from alembic.config import Config
     from alembic import command
 
@@ -108,9 +112,9 @@ def on_startup():
             command.upgrade(alembic_cfg, "head")
             logger.info("Database migrations applied successfully")
         except Exception as e:
-            logger.warning("Migration warning: %s", e)
+            logger.warning("Migration warning (non-blocking): %s", e)
 
-    # Ensure tenant databases also have the latest schema
+    # 3. Ensure tenant databases also have the latest schema
     from sqlalchemy import create_engine as _ce
     try:
         central = _default_session_factory()

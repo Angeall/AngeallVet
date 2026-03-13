@@ -1,16 +1,21 @@
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
+# Set DATABASE_URL to SQLite BEFORE any app imports, so database.py
+# creates an in-memory engine instead of trying to connect to PostgreSQL.
+os.environ["DATABASE_URL"] = "sqlite://"
+
 import jwt
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
-from app.core.database import Base, get_db
+from app.core.database import Base, get_db, get_central_db
 from app.main import app
 from app.models.user import User, UserRole
 
@@ -24,6 +29,14 @@ engine = create_engine(
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
+
+# Enable foreign key support in SQLite
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -70,8 +83,15 @@ def client(db):
         finally:
             pass
 
+    def override_get_central_db():
+        try:
+            yield db
+        finally:
+            pass
+
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
+    app.dependency_overrides[get_central_db] = override_get_central_db
+    with TestClient(app, raise_server_exceptions=False) as c:
         yield c
     app.dependency_overrides.clear()
 
