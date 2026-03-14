@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
-from app.core.database import get_db
+from app.api.deps import get_tenant_db
 from app.core.security import get_current_user, require_roles
 from app.models.user import User, UserRole
 from app.models.hospitalization import Hospitalization, CareTask, HospitalizationStatus
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/hospitalization", tags=["Hospitalization"])
 @router.get("", response_model=list[HospitalizationResponse])
 def list_hospitalizations(
     active_only: bool = Query(True),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Hospitalization)
@@ -29,7 +29,7 @@ def list_hospitalizations(
 @router.post("", response_model=HospitalizationResponse, status_code=201)
 def create_hospitalization(
     data: HospitalizationCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.VETERINARIAN)),
 ):
     hosp = Hospitalization(
@@ -57,7 +57,7 @@ def create_hospitalization(
 @router.get("/{hosp_id}", response_model=HospitalizationResponse)
 def get_hospitalization(
     hosp_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     hosp = db.query(Hospitalization).filter(Hospitalization.id == hosp_id).first()
@@ -70,7 +70,7 @@ def get_hospitalization(
 def update_hospitalization(
     hosp_id: int,
     data: HospitalizationUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     hosp = db.query(Hospitalization).filter(Hospitalization.id == hosp_id).first()
@@ -93,7 +93,7 @@ def update_hospitalization(
 def add_care_task(
     hosp_id: int,
     data: CareTaskCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     hosp = db.query(Hospitalization).filter(Hospitalization.id == hosp_id).first()
@@ -112,7 +112,7 @@ def update_care_task(
     hosp_id: int,
     task_id: int,
     data: CareTaskUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     task = db.query(CareTask).filter(

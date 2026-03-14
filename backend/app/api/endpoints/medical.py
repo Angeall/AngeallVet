@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from app.core.database import get_db
+from app.api.deps import get_tenant_db
 from app.core.config import settings
 from app.core.security import get_current_user, require_roles
 from app.models.user import User, UserRole
@@ -27,7 +27,7 @@ def list_records(
     record_type: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 50,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(MedicalRecord)
@@ -41,7 +41,7 @@ def list_records(
 @router.post("/records", response_model=MedicalRecordResponse, status_code=201)
 def create_record(
     data: MedicalRecordCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.VETERINARIAN)),
 ):
     record_data = data.model_dump(exclude={"prescriptions"})
@@ -71,7 +71,7 @@ def create_record(
 @router.get("/records/{record_id}", response_model=MedicalRecordResponse)
 def get_record(
     record_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     record = db.query(MedicalRecord).filter(MedicalRecord.id == record_id).first()
@@ -85,7 +85,7 @@ def upload_attachment(
     record_id: int,
     file: UploadFile = File(...),
     description: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     record = db.query(MedicalRecord).filter(MedicalRecord.id == record_id).first()
@@ -128,7 +128,7 @@ def upload_attachment(
 def list_templates(
     category: Optional[str] = Query(None),
     species: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(ConsultationTemplate).filter(ConsultationTemplate.is_active == True)
@@ -142,7 +142,7 @@ def list_templates(
 @router.post("/templates", response_model=ConsultationTemplateResponse, status_code=201)
 def create_template(
     data: ConsultationTemplateCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.VETERINARIAN)),
 ):
     template = ConsultationTemplate(**data.model_dump(), created_by_id=current_user.id)

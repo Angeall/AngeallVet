@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from app.core.database import get_db
+from app.api.deps import get_tenant_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.communication import Communication, ReminderRule, ReminderLog
@@ -20,7 +20,7 @@ def list_communications(
     channel: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 50,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Communication)
@@ -34,7 +34,7 @@ def list_communications(
 @router.post("", response_model=CommunicationResponse, status_code=201)
 def send_communication(
     data: CommunicationCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     comm = Communication(**data.model_dump())
@@ -49,7 +49,7 @@ def send_communication(
 # --- Reminder Rules ---
 @router.get("/reminders", response_model=list[ReminderRuleResponse])
 def list_reminder_rules(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     return db.query(ReminderRule).order_by(ReminderRule.name).all()
@@ -58,7 +58,7 @@ def list_reminder_rules(
 @router.post("/reminders", response_model=ReminderRuleResponse, status_code=201)
 def create_reminder_rule(
     data: ReminderRuleCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     rule = ReminderRule(**data.model_dump())
@@ -72,7 +72,7 @@ def create_reminder_rule(
 def update_reminder_rule(
     rule_id: int,
     data: ReminderRuleCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     rule = db.query(ReminderRule).filter(ReminderRule.id == rule_id).first()
@@ -90,7 +90,7 @@ def update_reminder_rule(
 @router.delete("/reminders/{rule_id}", status_code=204)
 def delete_reminder_rule(
     rule_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     rule = db.query(ReminderRule).filter(ReminderRule.id == rule_id).first()

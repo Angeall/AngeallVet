@@ -46,7 +46,11 @@ class Animal(Base):
     microchip_number = Column(String(50), unique=True, index=True)
     tattoo_number = Column(String(50), index=True)
     is_neutered = Column(Boolean, default=False)
-    vital_status = Column(SAEnum(VitalStatus), nullable=False, default=VitalStatus.ALIVE)
+    vital_status = Column(
+        SAEnum(VitalStatus, values_callable=lambda enum: [e.value for e in enum]),
+        nullable=False,
+        default=VitalStatus.ALIVE,
+    )
     vital_status_date = Column(Date)
     is_deceased = Column(Boolean, default=False)
     deceased_date = Column(Date)

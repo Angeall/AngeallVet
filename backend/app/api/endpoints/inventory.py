@@ -5,7 +5,7 @@ from typing import Optional
 from datetime import date, timedelta
 import uuid
 
-from app.core.database import get_db
+from app.api.deps import get_tenant_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.inventory import (
@@ -31,7 +31,7 @@ def list_products(
     low_stock: bool = Query(False),
     skip: int = 0,
     limit: int = 50,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Product).filter(Product.is_active == True)
@@ -48,7 +48,7 @@ def list_products(
 @router.post("/products", response_model=ProductResponse, status_code=201)
 def create_product(
     data: ProductCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     if not data.reference:
@@ -63,7 +63,7 @@ def create_product(
 @router.get("/products/{product_id}", response_model=ProductResponse)
 def get_product(
     product_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     product = db.query(Product).filter(Product.id == product_id).first()
@@ -76,7 +76,7 @@ def get_product(
 def update_product(
     product_id: int,
     data: ProductUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     product = db.query(Product).filter(Product.id == product_id).first()
@@ -96,7 +96,7 @@ def update_product(
 def add_lot(
     product_id: int,
     data: ProductLotCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     product = db.query(Product).filter(Product.id == product_id).first()
@@ -127,7 +127,7 @@ def add_lot(
 @router.get("/expiring", response_model=list[ProductLotResponse])
 def get_expiring_lots(
     days: int = Query(30),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     threshold = date.today() + timedelta(days=days)
@@ -146,7 +146,7 @@ def get_expiring_lots(
 @router.post("/movements", response_model=StockMovementResponse, status_code=201)
 def create_movement(
     data: StockMovementCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     product = db.query(Product).filter(Product.id == data.product_id).first()
@@ -175,7 +175,7 @@ def create_movement(
 # --- Suppliers ---
 @router.get("/suppliers", response_model=list[SupplierResponse])
 def list_suppliers(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     return db.query(Supplier).filter(Supplier.is_active == True).order_by(Supplier.name).all()
@@ -184,7 +184,7 @@ def list_suppliers(
 @router.post("/suppliers", response_model=SupplierResponse, status_code=201)
 def create_supplier(
     data: SupplierCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     supplier = Supplier(**data.model_dump())
@@ -198,7 +198,7 @@ def create_supplier(
 @router.post("/purchase-orders", response_model=PurchaseOrderResponse, status_code=201)
 def create_purchase_order(
     data: PurchaseOrderCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     order_number = f"PO-{uuid.uuid4().hex[:8].upper()}"
@@ -229,7 +229,7 @@ def create_purchase_order(
 
 @router.get("/shortcuts", response_model=list[ProductResponse])
 def get_shortcuts(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     """Products flagged as shortcuts for quick billing buttons."""
@@ -243,7 +243,7 @@ def get_shortcuts(
 
 @router.get("/alerts", response_model=list[ProductResponse])
 def get_stock_alerts(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     return (

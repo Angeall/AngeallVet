@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 import uuid
 
-from app.core.database import get_db
+from app.api.deps import get_tenant_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.billing import (
@@ -49,7 +49,7 @@ def list_invoices(
     date_to: Optional[date] = Query(None),
     skip: int = 0,
     limit: int = 50,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Invoice)
@@ -67,7 +67,7 @@ def list_invoices(
 @router.post("/invoices", response_model=InvoiceResponse, status_code=201)
 def create_invoice(
     data: InvoiceCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     invoice_number = f"FAC-{uuid.uuid4().hex[:8].upper()}"
@@ -119,7 +119,7 @@ def create_invoice(
 @router.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
 def get_invoice(
     invoice_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
@@ -130,7 +130,7 @@ def get_invoice(
 
 @router.get("/unpaid", response_model=list[InvoiceResponse])
 def list_unpaid(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     return (
@@ -145,7 +145,7 @@ def list_unpaid(
 @router.post("/payments", response_model=PaymentResponse, status_code=201)
 def record_payment(
     data: PaymentCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     invoice = db.query(Invoice).filter(Invoice.id == data.invoice_id).first()
@@ -177,7 +177,7 @@ def record_payment(
 @router.post("/estimates", response_model=EstimateResponse, status_code=201)
 def create_estimate(
     data: EstimateCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     estimate_number = f"DEV-{uuid.uuid4().hex[:8].upper()}"
@@ -217,7 +217,7 @@ def list_estimates(
     client_id: Optional[int] = Query(None),
     skip: int = 0,
     limit: int = 50,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Estimate)
@@ -229,7 +229,7 @@ def list_estimates(
 @router.get("/estimates/{estimate_id}", response_model=EstimateResponse)
 def get_estimate(
     estimate_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     estimate = db.query(Estimate).filter(Estimate.id == estimate_id).first()
@@ -241,7 +241,7 @@ def get_estimate(
 @router.post("/estimates/to-invoice", response_model=InvoiceResponse)
 def convert_estimate_to_invoice(
     data: EstimateToInvoiceRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     estimate = db.query(Estimate).filter(Estimate.id == data.estimate_id).first()
@@ -285,7 +285,7 @@ def convert_estimate_to_invoice(
 
 @router.get("/debts")
 def list_debts(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return clients with unpaid invoices, sorted by outstanding amount DESC."""
@@ -345,7 +345,7 @@ def list_debts(
 def get_stats(
     period: str = Query("day", description="day, week, month"),
     date_ref: Optional[date] = Query(None, description="Reference date"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return billing stats for a given period.

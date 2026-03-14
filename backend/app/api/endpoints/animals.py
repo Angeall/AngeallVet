@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import Optional
 
-from app.core.database import get_db
+from app.api.deps import get_tenant_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.animal import Animal, AnimalAlert, WeightRecord
@@ -23,7 +23,7 @@ def list_animals(
     species: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 50,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Animal)
@@ -46,7 +46,7 @@ def list_animals(
 @router.post("", response_model=AnimalResponse, status_code=201)
 def create_animal(
     data: AnimalCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     animal = Animal(**data.model_dump())
@@ -59,7 +59,7 @@ def create_animal(
 @router.get("/{animal_id}", response_model=AnimalResponse)
 def get_animal(
     animal_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     animal = db.query(Animal).filter(Animal.id == animal_id).first()
@@ -72,7 +72,7 @@ def get_animal(
 def update_animal(
     animal_id: int,
     data: AnimalUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     animal = db.query(Animal).filter(Animal.id == animal_id).first()
@@ -92,7 +92,7 @@ def update_animal(
 def add_alert(
     animal_id: int,
     data: AnimalAlertCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     animal = db.query(Animal).filter(Animal.id == animal_id).first()
@@ -109,7 +109,7 @@ def add_alert(
 def remove_alert(
     animal_id: int,
     alert_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     alert = db.query(AnimalAlert).filter(
@@ -125,7 +125,7 @@ def remove_alert(
 @router.get("/{animal_id}/weights", response_model=list[WeightRecordResponse])
 def get_weights(
     animal_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     return (
@@ -140,7 +140,7 @@ def get_weights(
 def add_weight(
     animal_id: int,
     data: WeightRecordCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     animal = db.query(Animal).filter(Animal.id == animal_id).first()

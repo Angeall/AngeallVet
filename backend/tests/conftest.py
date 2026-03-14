@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
 from app.core.database import Base, get_db, get_central_db
+from app.api.deps import get_tenant_db
 from app.main import app
 from app.models.user import User, UserRole
 
@@ -91,6 +92,7 @@ def client(db):
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_central_db] = override_get_central_db
+    app.dependency_overrides[get_tenant_db] = override_get_db
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
     app.dependency_overrides.clear()

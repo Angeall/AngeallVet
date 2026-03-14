@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, date
 
-from app.core.database import get_db
+from app.api.deps import get_tenant_db
 from app.core.security import get_current_user
 from app.models.user import User, UserRole, Notification
 from app.models.appointment import Appointment, AppointmentStatus
@@ -22,7 +22,7 @@ def list_appointments(
     status: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Appointment)
@@ -40,7 +40,7 @@ def list_appointments(
 @router.post("", response_model=AppointmentResponse, status_code=201)
 def create_appointment(
     data: AppointmentCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     appointment = Appointment(**data.model_dump())
@@ -52,7 +52,7 @@ def create_appointment(
 
 @router.get("/waiting-room", response_model=list[AppointmentResponse])
 def get_waiting_room(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     today = date.today()
@@ -75,7 +75,7 @@ def get_waiting_room(
 @router.get("/{appointment_id}", response_model=AppointmentResponse)
 def get_appointment(
     appointment_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     appt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
@@ -88,7 +88,7 @@ def get_appointment(
 def update_appointment(
     appointment_id: int,
     data: AppointmentUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     appt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
@@ -107,7 +107,7 @@ def update_appointment(
 def update_waiting_room_status(
     appointment_id: int,
     data: WaitingRoomUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     appt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
@@ -151,7 +151,7 @@ def update_waiting_room_status(
 @router.delete("/{appointment_id}", status_code=204)
 def cancel_appointment(
     appointment_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     appt = db.query(Appointment).filter(Appointment.id == appointment_id).first()

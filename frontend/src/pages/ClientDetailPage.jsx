@@ -33,6 +33,11 @@ export default function ClientDetailPage() {
   const [invoiceAnimalId, setInvoiceAnimalId] = useState('');
   const [products, setProducts] = useState([]);
 
+  // Edit client modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [editLoading, setEditLoading] = useState(false);
+
   const load = async () => {
     try {
       const [cRes, aRes, iRes, commRes] = await Promise.all([
@@ -98,6 +103,40 @@ export default function ClientDetailPage() {
     setInvoiceLines(updated);
   };
 
+  const openEditModal = () => {
+    setEditForm({
+      first_name: client?.first_name || '',
+      last_name: client?.last_name || '',
+      email: client?.email || '',
+      phone: client?.phone || '',
+      mobile: client?.mobile || '',
+      address: client?.address || '',
+      postal_code: client?.postal_code || '',
+      city: client?.city || '',
+      country: client?.country || 'France',
+      notes: client?.notes || '',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditLoading(true);
+    try {
+      const payload = Object.fromEntries(
+        Object.entries(editForm).map(([k, v]) => [k, v === '' ? null : v])
+      );
+      await clientsAPI.update(id, payload);
+      toast.success('Client mis a jour');
+      setShowEditModal(false);
+      load();
+    } catch {
+      toast.error('Erreur lors de la mise a jour');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   const invoiceTotal = invoiceLines.reduce((sum, l) => sum + (parseFloat(l.quantity) || 0) * (parseFloat(l.unit_price) || 0), 0);
 
   const submitInvoice = async () => {
@@ -129,11 +168,34 @@ export default function ClientDetailPage() {
           <h1 className="page-title">{client.last_name} {client.first_name}</h1>
         </div>
         <div className="page-header-actions">
+          <button className="btn btn-secondary" onClick={openEditModal} title="Modifier le client">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            {' '}Modifier
+          </button>
           <button className="btn btn-primary" onClick={() => { setShowInvoiceForm(!showInvoiceForm); setTab('invoices'); }}>
             + Facturation rapide
           </button>
         </div>
       </div>
+
+      {(() => {
+        const warnings = [];
+        if (!client.email) warnings.push('Adresse email manquante');
+        if (!client.phone && !client.mobile) warnings.push('Aucun numero de telephone');
+        if (!client.address) warnings.push('Adresse postale manquante');
+        if (warnings.length === 0) return null;
+        return (
+          <div className="alert-banner warning" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Fiche incomplete : {warnings.join(' — ')}</span>
+            </div>
+            <button className="btn btn-sm" style={{ background: 'rgba(146,64,14,0.15)', color: '#92400e', border: '1px solid #fcd34d', whiteSpace: 'nowrap' }} onClick={openEditModal}>
+              Completer
+            </button>
+          </div>
+        );
+      })()}
 
       <div className="stats-grid">
         <div className="stat-card">
@@ -154,7 +216,12 @@ export default function ClientDetailPage() {
       </div>
 
       <div className="card">
-        <h3 className="card-title">Coordonnees</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 className="card-title">Coordonnees</h3>
+          <button className="btn btn-secondary btn-sm" onClick={openEditModal} title="Modifier">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+        </div>
         <div className="form-row" style={{ marginTop: '12px' }}>
           <div><strong>Email:</strong> {client.email || '-'}</div>
           <div><strong>Tel:</strong> {client.phone || '-'}</div>
@@ -357,6 +424,75 @@ export default function ClientDetailPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {showEditModal && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowEditModal(false); }}>
+          <div className="modal">
+            <div className="modal-header">
+              <h2 className="modal-title">Modifier le client</h2>
+              <button className="modal-close" onClick={() => setShowEditModal(false)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Prenom *</label>
+                  <input className="form-input" value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Nom *</label>
+                  <input className="form-input" value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} required />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Email</label>
+                  <input type="email" className="form-input" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Telephone</label>
+                  <input className="form-input" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Mobile</label>
+                  <input className="form-input" value={editForm.mobile} onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group" style={{ flex: 2 }}>
+                  <label className="form-label">Adresse</label>
+                  <input className="form-input" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Code postal</label>
+                  <input className="form-input" value={editForm.postal_code} onChange={(e) => setEditForm({ ...editForm, postal_code: e.target.value })} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Ville</label>
+                  <input className="form-input" value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Pays</label>
+                  <input className="form-input" value={editForm.country} onChange={(e) => setEditForm({ ...editForm, country: e.target.value })} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Notes</label>
+                <textarea className="form-textarea" rows={3} value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Annuler</button>
+                <button type="submit" className="btn btn-primary" disabled={editLoading}>
+                  {editLoading ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /d/Antho/Documents/Projets/AngeallVet/frontend -type f -name *.js -o -name *.jsx -o -name *.ts -o -name *.tsx)"
+    ]
+  }
+}
