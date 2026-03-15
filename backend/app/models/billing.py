@@ -18,6 +18,18 @@ class InvoiceStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class InvoiceVeterinarian(Base):
+    __tablename__ = "invoice_veterinarians"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    invoice = relationship("Invoice", back_populates="veterinarians")
+    user = relationship("User")
+
+
 class Invoice(Base):
     __tablename__ = "invoices"
 
@@ -33,6 +45,7 @@ class Invoice(Base):
     total = Column(Numeric(10, 2), default=0)
     amount_paid = Column(Numeric(10, 2), default=0)
     notes = Column(Text)
+    medical_record_id = Column(Integer, ForeignKey("medical_records.id"), nullable=True, index=True)
     estimate_id = Column(Integer, ForeignKey("estimates.id"), index=True)
     created_by_id = Column(Integer, ForeignKey("users.id"), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
@@ -41,6 +54,7 @@ class Invoice(Base):
     client = relationship("Client", back_populates="invoices")
     lines = relationship("InvoiceLine", back_populates="invoice", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="invoice")
+    veterinarians = relationship("InvoiceVeterinarian", back_populates="invoice", cascade="all, delete-orphan")
 
 
 class InvoiceLine(Base):
@@ -55,6 +69,7 @@ class InvoiceLine(Base):
     vat_rate = Column(Numeric(4, 2), default=20.00)
     discount_percent = Column(Numeric(5, 2), default=0)
     line_total = Column(Numeric(10, 2))
+    lot_number = Column(String(100))
 
     invoice = relationship("Invoice", back_populates="lines")
 

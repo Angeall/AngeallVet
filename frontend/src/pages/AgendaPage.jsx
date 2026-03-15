@@ -302,6 +302,27 @@ export default function AgendaPage() {
                 </select>
               </div>
             </div>
+            {/* Client alerts */}
+            {selectedClient?.alerts?.filter(a => a.is_active).length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+                {selectedClient.alerts.filter(a => a.is_active).map(alert => (
+                  <div key={alert.id} className={`alert-banner ${alert.severity}`} style={{ margin: 0, padding: '6px 12px', fontSize: '0.85rem' }}>
+                    <strong>Client - {alert.alert_type}:</strong> {alert.message}
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Animal alerts */}
+            {selectedAnimal?.alerts?.filter(a => a.is_active).length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+                {selectedAnimal.alerts.filter(a => a.is_active).map(alert => (
+                  <div key={alert.id} className={`alert-banner ${alert.severity}`} style={{ margin: 0, padding: '6px 12px', fontSize: '0.85rem' }}>
+                    <strong>{selectedAnimal.name} - {alert.alert_type}:</strong> {alert.message}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Type</label>

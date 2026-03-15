@@ -12,6 +12,7 @@ class InvoiceLineCreate(BaseModel):
     unit_price: Decimal
     vat_rate: Decimal = Decimal("20.00")
     discount_percent: Decimal = Decimal("0")
+    lot_number: Optional[str] = None
 
 
 class InvoiceLineResponse(InvoiceLineCreate):
@@ -36,6 +37,15 @@ class InvoiceUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+class InvoiceVeterinarianResponse(BaseModel):
+    id: int
+    user_id: int
+    user_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class InvoiceResponse(BaseModel):
     id: int
     invoice_number: str
@@ -51,6 +61,7 @@ class InvoiceResponse(BaseModel):
     notes: Optional[str] = None
     lines: List[InvoiceLineResponse] = []
     payments: List["PaymentResponse"] = []
+    veterinarians: List[InvoiceVeterinarianResponse] = []
     created_at: datetime
     client_name: Optional[str] = None
 

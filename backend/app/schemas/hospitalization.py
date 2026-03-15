@@ -24,6 +24,7 @@ class CareTaskResponse(BaseModel):
     is_completed: bool
     completed_at: Optional[datetime] = None
     completed_by_id: Optional[int] = None
+    completed_by_name: Optional[str] = None
     notes: Optional[str] = None
 
     class Config:

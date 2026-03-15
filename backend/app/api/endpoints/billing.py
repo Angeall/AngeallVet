@@ -11,6 +11,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.billing import (
     Invoice, InvoiceLine, Estimate, EstimateLine, Payment, InvoiceStatus,
+    InvoiceVeterinarian,
 )
 from app.models.client import Client
 from app.models.inventory import Product, StockMovement
@@ -42,12 +43,16 @@ def _calculate_invoice_totals(lines):
 
 
 def _enrich_invoice(inv, db):
-    """Add client_name to an invoice."""
+    """Add client_name and veterinarian names to an invoice."""
     from app.schemas.billing import InvoiceResponse as IR
     data = IR.model_validate(inv).model_dump()
     client = db.query(Client).filter(Client.id == inv.client_id).first()
     if client:
         data["client_name"] = f"{client.last_name} {client.first_name}"
+    for v in data.get("veterinarians", []):
+        user = db.query(User).filter(User.id == v["user_id"]).first()
+        if user:
+            v["user_name"] = f"{user.first_name} {user.last_name}"
     return data
 
 
@@ -133,9 +138,12 @@ def create_invoice(
     invoice.total_vat = total_vat
     invoice.total = total
 
+    # Auto-add current user as veterinarian
+    db.add(InvoiceVeterinarian(invoice_id=invoice.id, user_id=current_user.id))
+
     db.commit()
     db.refresh(invoice)
-    return invoice
+    return _enrich_invoice(invoice, db)
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
@@ -147,7 +155,45 @@ def get_invoice(
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
-    return invoice
+    return _enrich_invoice(invoice, db)
+
+
+@router.post("/invoices/{invoice_id}/veterinarians", status_code=201)
+def add_invoice_veterinarian(
+    invoice_id: int,
+    user_id: int = Query(...),
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(get_current_user),
+):
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture non trouvée")
+    existing = db.query(InvoiceVeterinarian).filter(
+        InvoiceVeterinarian.invoice_id == invoice_id,
+        InvoiceVeterinarian.user_id == user_id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Utilisateur deja associe")
+    db.add(InvoiceVeterinarian(invoice_id=invoice_id, user_id=user_id))
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete("/invoices/{invoice_id}/veterinarians/{user_id}", status_code=204)
+def remove_invoice_veterinarian(
+    invoice_id: int,
+    user_id: int,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(get_current_user),
+):
+    link = db.query(InvoiceVeterinarian).filter(
+        InvoiceVeterinarian.invoice_id == invoice_id,
+        InvoiceVeterinarian.user_id == user_id,
+    ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Lien non trouve")
+    db.delete(link)
+    db.commit()
 
 
 @router.get("/unpaid", response_model=list[InvoiceResponse])

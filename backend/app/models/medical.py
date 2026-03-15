@@ -32,6 +32,7 @@ class MedicalRecord(Base):
     assessment = Column(Text)  # Diagnostic
     plan = Column(Text)        # Plan de traitement
     home_treatment = Column(Text)  # Traitement à la maison
+    pharmacy_prescription = Column(Text)  # Médicaments à aller chercher en pharmacie
     notes = Column(Text)
     template_id = Column(Integer, ForeignKey("consultation_templates.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
@@ -129,6 +130,7 @@ class MedicalRecordProduct(Base):
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     quantity = Column(Numeric(10, 2), default=1)
     treatment_location = Column(String(20), default="home")  # "home" or "onsite"
+    lot_number = Column(String(100))
 
     medical_record = relationship("MedicalRecord", back_populates="home_treatment_products")
     product = relationship("Product")

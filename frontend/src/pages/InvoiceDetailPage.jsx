@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { billingAPI, clientsAPI, animalsAPI, settingsAPI } from '../services/api';
+import { billingAPI, clientsAPI, animalsAPI, settingsAPI, authAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 const statusLabels = {
@@ -37,6 +37,35 @@ export default function InvoiceDetailPage() {
   // Debt acknowledgment
   const [showDebtDoc, setShowDebtDoc] = useState(false);
   const [debtData, setDebtData] = useState(null);
+
+  // Veterinarians management
+  const [staff, setStaff] = useState([]);
+  const [showAddVet, setShowAddVet] = useState(false);
+
+  useEffect(() => {
+    authAPI.listStaff().then(res => setStaff(res.data || [])).catch(() => {});
+  }, []);
+
+  const addVet = async (userId) => {
+    try {
+      await billingAPI.addInvoiceVet(id, userId);
+      toast.success('Veterinaire ajoute');
+      setShowAddVet(false);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur');
+    }
+  };
+
+  const removeVet = async (userId) => {
+    try {
+      await billingAPI.removeInvoiceVet(id, userId);
+      toast.success('Veterinaire retire');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur');
+    }
+  };
 
   const load = async () => {
     try {
@@ -304,13 +333,35 @@ export default function InvoiceDetailPage() {
             <p style={{ whiteSpace: 'pre-wrap', marginTop: '4px' }}>{invoice.notes}</p>
           </div>
         )}
+        {/* Veterinarians */}
+        <div style={{ marginTop: '16px', borderTop: '1px solid var(--gray-100)', paddingTop: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <strong>Veterinaires:</strong>
+            {(invoice.veterinarians || []).map(v => (
+              <span key={v.id} className="badge badge-blue" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                {v.user_name || `#${v.user_id}`}
+                <button onClick={() => removeVet(v.user_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, marginLeft: '4px', fontSize: '0.9em', lineHeight: 1 }}>x</button>
+              </span>
+            ))}
+            {(!invoice.veterinarians || invoice.veterinarians.length === 0) && <span style={{ color: 'var(--gray-400)', fontSize: '0.85rem' }}>Aucun</span>}
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowAddVet(!showAddVet)} style={{ marginLeft: '4px' }}>+</button>
+          </div>
+          {showAddVet && (
+            <select className="form-select" style={{ maxWidth: '250px' }} onChange={(e) => { if (e.target.value) { addVet(parseInt(e.target.value)); e.target.value = ''; } }}>
+              <option value="">-- Ajouter un collegue --</option>
+              {staff.filter(s => !(invoice.veterinarians || []).some(v => v.user_id === s.id)).map(s => (
+                <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
 
       <div className="card">
         <h3 className="card-title" style={{ marginBottom: '16px' }}>Lignes de facture</h3>
         <table>
           <thead>
-            <tr><th>Description</th><th>Qte</th><th>Prix unitaire HT</th><th>TVA %</th><th>Total HT</th></tr>
+            <tr><th>Description</th><th>Qte</th><th>Prix unitaire HT</th><th>TVA %</th><th>N Lot</th><th>Total HT</th></tr>
           </thead>
           <tbody>
             {(invoice.lines || []).map((line, idx) => (
@@ -319,11 +370,12 @@ export default function InvoiceDetailPage() {
                 <td>{parseFloat(line.quantity)}</td>
                 <td>{parseFloat(line.unit_price).toFixed(2)} EUR</td>
                 <td>{parseFloat(line.vat_rate).toFixed(0)}%</td>
+                <td>{line.lot_number || '-'}</td>
                 <td style={{ fontWeight: 600 }}>{parseFloat(line.line_total).toFixed(2)} EUR</td>
               </tr>
             ))}
             {(!invoice.lines || invoice.lines.length === 0) && (
-              <tr><td colSpan="5" className="table-empty">Aucune ligne</td></tr>
+              <tr><td colSpan="6" className="table-empty">Aucune ligne</td></tr>
             )}
           </tbody>
         </table>

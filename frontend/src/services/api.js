@@ -59,6 +59,8 @@ export const clientsAPI = {
   update: (id, data) => api.put(`/clients/${id}`, data),
   delete: (id) => api.delete(`/clients/${id}`),
   merge: (data) => api.post('/clients/merge', data),
+  addAlert: (id, data) => api.post(`/clients/${id}/alerts`, data),
+  removeAlert: (id, alertId) => api.delete(`/clients/${id}/alerts/${alertId}`),
 };
 
 // Animals
@@ -137,6 +139,8 @@ export const billingAPI = {
   getStats: (params) => api.get('/billing/stats', { params }),
   listDebts: () => api.get('/billing/debts'),
   getDebtAcknowledgment: (id) => api.get(`/billing/invoices/${id}/debt-acknowledgment`),
+  addInvoiceVet: (invoiceId, userId) => api.post(`/billing/invoices/${invoiceId}/veterinarians?user_id=${userId}`),
+  removeInvoiceVet: (invoiceId, userId) => api.delete(`/billing/invoices/${invoiceId}/veterinarians/${userId}`),
 };
 
 // Communications

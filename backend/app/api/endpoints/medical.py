@@ -15,7 +15,7 @@ from app.models.medical import (
 )
 from app.models.animal import Animal, WeightRecord
 from app.models.inventory import Product
-from app.models.billing import Invoice, InvoiceLine, InvoiceStatus
+from app.models.billing import Invoice, InvoiceLine, InvoiceStatus, InvoiceVeterinarian
 from app.schemas.medical import (
     MedicalRecordCreate, MedicalRecordResponse,
     ConsultationTemplateCreate, ConsultationTemplateResponse,
@@ -27,12 +27,20 @@ router = APIRouter(prefix="/medical", tags=["Medical Records"])
 
 
 def _enrich_record(record, db):
-    """Add product_name to each home_treatment_product."""
+    """Add product_name, veterinarian_name, and invoice_id."""
     data = MedicalRecordResponse.model_validate(record).model_dump()
     for p in data.get("home_treatment_products", []):
         product = db.query(Product).filter(Product.id == p["product_id"]).first()
         if product:
             p["product_name"] = product.name
+    # Veterinarian name
+    vet = db.query(User).filter(User.id == record.veterinarian_id).first()
+    if vet:
+        data["veterinarian_name"] = f"Dr. {vet.last_name}"
+    # Check if an invoice was created from this record
+    invoice = db.query(Invoice).filter(Invoice.medical_record_id == record.id).first()
+    if invoice:
+        data["invoice_id"] = invoice.id
     return data
 
 
@@ -95,6 +103,7 @@ def create_record(
             product_id=htp.product_id,
             quantity=htp.quantity,
             treatment_location="home",
+            lot_number=htp.lot_number,
         )
         db.add(mrp)
 
@@ -105,6 +114,7 @@ def create_record(
             product_id=otp.product_id,
             quantity=otp.quantity,
             treatment_location="onsite",
+            lot_number=otp.lot_number,
         )
         db.add(mrp)
 
@@ -135,6 +145,11 @@ def create_invoice_from_record(
     if not record:
         raise HTTPException(status_code=404, detail="Dossier medical non trouve")
 
+    # Check if an invoice already exists for this record
+    existing_invoice = db.query(Invoice).filter(Invoice.medical_record_id == record_id).first()
+    if existing_invoice:
+        return existing_invoice
+
     if not record.home_treatment_products:
         raise HTTPException(status_code=400, detail="Aucun produit de traitement a domicile")
 
@@ -147,6 +162,7 @@ def create_invoice_from_record(
         invoice_number=invoice_number,
         client_id=animal.client_id,
         animal_id=animal.id,
+        medical_record_id=record_id,
         created_by_id=current_user.id,
     )
     db.add(invoice)
@@ -172,6 +188,7 @@ def create_invoice_from_record(
             unit_price=unit_price,
             vat_rate=vat_rate,
             line_total=line_total,
+            lot_number=mrp.lot_number,
         )
         db.add(line)
         subtotal += line_total
@@ -180,6 +197,9 @@ def create_invoice_from_record(
     invoice.subtotal = subtotal
     invoice.total_vat = total_vat
     invoice.total = subtotal + total_vat
+
+    # Auto-add current user as veterinarian on the invoice
+    db.add(InvoiceVeterinarian(invoice_id=invoice.id, user_id=current_user.id))
 
     db.commit()
     db.refresh(invoice)

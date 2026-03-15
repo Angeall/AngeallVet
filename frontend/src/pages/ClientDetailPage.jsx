@@ -33,6 +33,10 @@ export default function ClientDetailPage() {
   const [invoiceAnimalId, setInvoiceAnimalId] = useState('');
   const [products, setProducts] = useState([]);
 
+  // Client alerts state
+  const [showAlertForm, setShowAlertForm] = useState(false);
+  const [alertForm, setAlertForm] = useState({ alert_type: 'bad_payer', message: '', severity: 'warning' });
+
   // Edit client modal state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({});
@@ -138,6 +142,24 @@ export default function ClientDetailPage() {
     }
   };
 
+  const clientAlertTypeLabels = { bad_payer: 'Mauvais payeur', aggressive: 'Agressif', blacklisted: 'Liste noire', other: 'Autre' };
+  const severityLabels = { info: 'Info', warning: 'Attention', danger: 'Danger' };
+
+  const handleAlertSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await clientsAPI.addAlert(id, alertForm);
+      toast.success('Alerte ajoutee');
+      setShowAlertForm(false);
+      setAlertForm({ alert_type: 'bad_payer', message: '', severity: 'warning' });
+      load();
+    } catch { toast.error('Erreur'); }
+  };
+
+  const removeAlert = async (alertId) => {
+    try { await clientsAPI.removeAlert(id, alertId); toast.success('Alerte supprimee'); load(); } catch { toast.error('Erreur'); }
+  };
+
   const invoiceTotal = invoiceLines.reduce((sum, l) => sum + (parseFloat(l.quantity) || 0) * (parseFloat(l.unit_price) || 0), 0);
 
   const submitInvoice = async () => {
@@ -216,6 +238,30 @@ export default function ClientDetailPage() {
         );
       })()}
 
+      {/* Client Alerts */}
+      {((client.alerts?.filter(a => a.is_active).length > 0) || showAlertForm) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
+          {client.alerts?.filter(a => a.is_active).map(alert => (
+            <div key={alert.id} className={`alert-banner ${alert.severity}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 0, padding: '6px 12px', fontSize: '0.85rem' }}>
+              <span><strong>{clientAlertTypeLabels[alert.alert_type] || alert.alert_type}:</strong> {alert.message}</span>
+              <button className="btn btn-sm" onClick={() => removeAlert(alert.id)} style={{ background: 'rgba(255,255,255,0.3)', border: 'none', cursor: 'pointer', padding: '2px 8px', borderRadius: '4px' }}>X</button>
+            </div>
+          ))}
+          {showAlertForm && (
+            <div className="card" style={{ padding: '12px', margin: 0 }}>
+              <form onSubmit={handleAlertSubmit}>
+                <div className="form-row">
+                  <div className="form-group"><label className="form-label">Type *</label><select className="form-select" value={alertForm.alert_type} onChange={(e) => setAlertForm({ ...alertForm, alert_type: e.target.value })}>{Object.entries(clientAlertTypeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+                  <div className="form-group"><label className="form-label">Severite</label><select className="form-select" value={alertForm.severity} onChange={(e) => setAlertForm({ ...alertForm, severity: e.target.value })}>{Object.entries(severityLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+                  <div className="form-group" style={{ flex: 2 }}><label className="form-label">Message *</label><input className="form-input" value={alertForm.message} onChange={(e) => setAlertForm({ ...alertForm, message: e.target.value })} required /></div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}><button type="submit" className="btn btn-primary btn-sm">Ajouter</button><button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowAlertForm(false)}>Annuler</button></div>
+              </form>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-icon blue">P</div>
@@ -237,9 +283,12 @@ export default function ClientDetailPage() {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 className="card-title">Coordonnees</h3>
-          <button className="btn btn-secondary btn-sm" onClick={openEditModal} title="Modifier">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowAlertForm(!showAlertForm)}>+ Alerte</button>
+            <button className="btn btn-secondary btn-sm" onClick={openEditModal} title="Modifier">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+          </div>
         </div>
         <div className="form-row" style={{ marginTop: '12px' }}>
           <div><strong>Email:</strong> {client.email || '-'}</div>

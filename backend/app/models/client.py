@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -30,3 +30,18 @@ class Client(Base):
 
     animals = relationship("Animal", back_populates="owner", lazy="selectin")
     invoices = relationship("Invoice", back_populates="client", lazy="dynamic")
+    alerts = relationship("ClientAlert", back_populates="client", lazy="selectin")
+
+
+class ClientAlert(Base):
+    __tablename__ = "client_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    alert_type = Column(String(50), nullable=False)  # bad_payer, aggressive, other
+    message = Column(String(500), nullable=False)
+    severity = Column(String(20), default="warning")  # info, warning, danger
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    client = relationship("Client", back_populates="alerts")

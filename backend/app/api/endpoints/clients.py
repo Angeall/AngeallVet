@@ -6,9 +6,12 @@ from typing import Optional
 from app.api.deps import get_tenant_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.models.client import Client
+from app.models.client import Client, ClientAlert
 from app.models.animal import Animal
-from app.schemas.client import ClientCreate, ClientUpdate, ClientResponse, ClientMergeRequest
+from app.schemas.client import (
+    ClientCreate, ClientUpdate, ClientResponse, ClientMergeRequest,
+    ClientAlertCreate, ClientAlertResponse,
+)
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
@@ -124,3 +127,37 @@ def merge_clients(
     db.commit()
     db.refresh(target)
     return target
+
+
+# --- Client Alerts ---
+@router.post("/{client_id}/alerts", response_model=ClientAlertResponse, status_code=201)
+def add_client_alert(
+    client_id: int,
+    data: ClientAlertCreate,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(get_current_user),
+):
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client non trouvé")
+    alert = ClientAlert(client_id=client_id, **data.model_dump())
+    db.add(alert)
+    db.commit()
+    db.refresh(alert)
+    return alert
+
+
+@router.delete("/{client_id}/alerts/{alert_id}", status_code=204)
+def remove_client_alert(
+    client_id: int,
+    alert_id: int,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(get_current_user),
+):
+    alert = db.query(ClientAlert).filter(
+        ClientAlert.id == alert_id, ClientAlert.client_id == client_id
+    ).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alerte non trouvée")
+    alert.is_active = False
+    db.commit()

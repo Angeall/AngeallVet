@@ -57,6 +57,23 @@ class ClientUpdate(BaseModel):
         return _empty_to_none(v)
 
 
+class ClientAlertCreate(BaseModel):
+    alert_type: str
+    message: str
+    severity: str = "warning"
+
+
+class ClientAlertResponse(BaseModel):
+    id: int
+    alert_type: str
+    message: str
+    severity: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
 class ClientResponse(ClientBase):
     id: int
     account_balance: Decimal
@@ -64,6 +81,7 @@ class ClientResponse(ClientBase):
     created_at: datetime
     animal_count: Optional[int] = None
     vat_number: Optional[str] = None
+    alerts: List[ClientAlertResponse] = []
 
     class Config:
         from_attributes = True

@@ -220,7 +220,7 @@ export default function HospitalizationDetailPage() {
 
         {completedTasks.length > 0 ? (
           <table>
-            <thead><tr><th>Prevu</th><th>Realise</th><th>Type</th><th>Description</th><th>Notes</th></tr></thead>
+            <thead><tr><th>Prevu</th><th>Realise</th><th>Type</th><th>Description</th><th>Par</th><th>Notes</th></tr></thead>
             <tbody>
               {completedTasks.sort((a, b) => new Date(b.completed_at || b.scheduled_at) - new Date(a.completed_at || a.scheduled_at)).map((task) => (
                 <tr key={task.id} style={{ opacity: 0.8 }}>
@@ -228,6 +228,7 @@ export default function HospitalizationDetailPage() {
                   <td>{task.completed_at ? new Date(task.completed_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</td>
                   <td><span className="badge badge-green">{taskTypeLabels[task.task_type] || task.task_type}</span></td>
                   <td>{task.description}</td>
+                  <td>{task.completed_by_name || '-'}</td>
                   <td>{task.notes || '-'}</td>
                 </tr>
               ))}

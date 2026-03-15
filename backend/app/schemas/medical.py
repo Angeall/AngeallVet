@@ -54,6 +54,7 @@ class PrescriptionResponse(BaseModel):
 class HomeTreatmentProduct(BaseModel):
     product_id: int
     quantity: Decimal = Decimal("1")
+    lot_number: Optional[str] = None
 
 
 class HomeTreatmentProductResponse(BaseModel):
@@ -61,6 +62,7 @@ class HomeTreatmentProductResponse(BaseModel):
     product_id: int
     quantity: Decimal
     treatment_location: str = "home"
+    lot_number: Optional[str] = None
     product_name: Optional[str] = None
 
     class Config:
@@ -75,6 +77,7 @@ class MedicalRecordBase(BaseModel):
     assessment: Optional[str] = None
     plan: Optional[str] = None
     home_treatment: Optional[str] = None
+    pharmacy_prescription: Optional[str] = None
     notes: Optional[str] = None
     template_id: Optional[int] = None
     appointment_id: Optional[int] = None
@@ -90,9 +93,11 @@ class MedicalRecordCreate(MedicalRecordBase):
 class MedicalRecordResponse(MedicalRecordBase):
     id: int
     veterinarian_id: int
+    veterinarian_name: Optional[str] = None
     prescriptions: List[PrescriptionResponse] = []
     attachments: List[AttachmentResponse] = []
     home_treatment_products: List[HomeTreatmentProductResponse] = []
+    invoice_id: Optional[int] = None
     created_at: datetime
 
     class Config:

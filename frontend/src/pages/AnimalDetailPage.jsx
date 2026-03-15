@@ -19,7 +19,7 @@ export default function AnimalDetailPage() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
   const [recordForm, setRecordForm] = useState({
-    record_type: 'consultation', subjective: '', objective: '', assessment: '', plan: '', home_treatment: '', notes: '',
+    record_type: 'consultation', subjective: '', objective: '', assessment: '', plan: '', home_treatment: '', pharmacy_prescription: '', notes: '', weight_kg: '',
   });
   const [hospForm, setHospForm] = useState({ reason: '', cage_number: '' });
   const [showAlertForm, setShowAlertForm] = useState(false);
@@ -30,6 +30,7 @@ export default function AnimalDetailPage() {
   const [invoiceLines, setInvoiceLines] = useState([{ description: '', quantity: '1', unit_price: '', vat_rate: '20.00', product_id: null }]);
   const [speciesList, setSpeciesList] = useState([]);
   const [createdInvoices, setCreatedInvoices] = useState({});
+  const [sentEmails, setSentEmails] = useState({});
 
   // On-site treatment products
   const [onsiteProducts, setOnsiteProducts] = useState([]);
@@ -107,21 +108,21 @@ export default function AnimalDetailPage() {
   }, [htProductSearch]);
 
   const addOnsiteProduct = (product) => {
-    setOnsiteProducts(prev => [...prev, { product_id: product.id, name: product.name, quantity: 1, selling_price: product.selling_price }]);
+    setOnsiteProducts(prev => [...prev, { product_id: product.id, name: product.name, quantity: 1, selling_price: product.selling_price, lot_number: '' }]);
     setOnsiteProductSearch(''); setOnsiteProductResults([]);
   };
   const removeOnsiteProduct = (idx) => setOnsiteProducts(prev => prev.filter((_, i) => i !== idx));
-  const updateOnsiteProductQty = (idx, qty) => {
-    setOnsiteProducts(prev => { const u = [...prev]; u[idx] = { ...u[idx], quantity: parseFloat(qty) || 1 }; return u; });
+  const updateOnsiteProduct = (idx, field, value) => {
+    setOnsiteProducts(prev => { const u = [...prev]; u[idx] = { ...u[idx], [field]: value }; return u; });
   };
 
   const addHtProduct = (product) => {
-    setHtProducts(prev => [...prev, { product_id: product.id, name: product.name, quantity: 1, selling_price: product.selling_price }]);
+    setHtProducts(prev => [...prev, { product_id: product.id, name: product.name, quantity: 1, selling_price: product.selling_price, lot_number: '' }]);
     setHtProductSearch(''); setHtProductResults([]);
   };
   const removeHtProduct = (idx) => setHtProducts(prev => prev.filter((_, i) => i !== idx));
-  const updateHtProductQty = (idx, qty) => {
-    setHtProducts(prev => { const u = [...prev]; u[idx] = { ...u[idx], quantity: parseFloat(qty) || 1 }; return u; });
+  const updateHtProduct = (idx, field, value) => {
+    setHtProducts(prev => { const u = [...prev]; u[idx] = { ...u[idx], [field]: value }; return u; });
   };
 
   const addWeight = async (e) => {
@@ -148,15 +149,22 @@ export default function AnimalDetailPage() {
   const handleRecordSubmit = async (e) => {
     e.preventDefault();
     try {
-      await medicalAPI.createRecord({
+      const payload = {
         ...recordForm, animal_id: parseInt(id),
-        onsite_treatment_products: onsiteProducts.map(p => ({ product_id: p.product_id, quantity: p.quantity })),
-        home_treatment_products: htProducts.map(p => ({ product_id: p.product_id, quantity: p.quantity })),
-      });
+        weight_kg: recordForm.weight_kg ? parseFloat(recordForm.weight_kg) : null,
+        onsite_treatment_products: onsiteProducts.map(p => ({ product_id: p.product_id, quantity: p.quantity, lot_number: p.lot_number || null })),
+        home_treatment_products: htProducts.map(p => ({ product_id: p.product_id, quantity: p.quantity, lot_number: p.lot_number || null })),
+      };
+      await medicalAPI.createRecord(payload);
       toast.success('Dossier medical cree'); setShowRecordForm(false);
-      setRecordForm({ record_type: 'consultation', subjective: '', objective: '', assessment: '', plan: '', home_treatment: '', notes: '' });
+      setRecordForm({ record_type: 'consultation', subjective: '', objective: '', assessment: '', plan: '', home_treatment: '', pharmacy_prescription: '', notes: '', weight_kg: '' });
       setOnsiteProducts([]); setHtProducts([]);
-      const rRes = await medicalAPI.listRecords({ animal_id: id }); setRecords(rRes.data);
+      const [rRes, wRes] = await Promise.all([
+        medicalAPI.listRecords({ animal_id: id }),
+        animalsAPI.getWeights(id),
+      ]);
+      setRecords(rRes.data);
+      setWeights(wRes.data);
     } catch { toast.error('Erreur lors de la creation'); }
   };
 
@@ -181,6 +189,7 @@ export default function AnimalDetailPage() {
         body: `Bonjour,\n\nVoici les instructions de traitement pour ${animal.name} :\n\n${record.home_treatment || record.plan || ''}\n\nN'hesitez pas a nous contacter.\n\nCordialement,\nClinique AngeallVet`,
       });
       toast.success('Email envoye au client');
+      setSentEmails(prev => ({ ...prev, [record.id]: true }));
     } catch { toast.error('Erreur d\'envoi'); }
   };
 
@@ -434,6 +443,7 @@ export default function AnimalDetailPage() {
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Type *</label><select className="form-select" value={recordForm.record_type} onChange={(e) => setRecordForm({ ...recordForm, record_type: e.target.value })}>{Object.entries(recordTypeLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                   <div className="form-group"><label className="form-label">Template</label><select className="form-select" onChange={(e) => applyTemplate(e.target.value)}><option value="">-- Choisir --</option>{templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+                  <div className="form-group"><label className="form-label">Poids (kg)</label><input type="number" step="0.01" min="0" className="form-input" placeholder="Ex: 12.5" value={recordForm.weight_kg || ''} onChange={(e) => setRecordForm({ ...recordForm, weight_kg: e.target.value })} /></div>
                 </div>
                 <div className="form-group"><label className="form-label">S - Subjectif (Motif / Anamnese)</label><textarea className="form-textarea" value={recordForm.subjective} onChange={(e) => setRecordForm({ ...recordForm, subjective: e.target.value })} /></div>
                 <div className="form-group"><label className="form-label">O - Objectif (Examen clinique)</label><textarea className="form-textarea" value={recordForm.objective} onChange={(e) => setRecordForm({ ...recordForm, objective: e.target.value })} /></div>
@@ -470,7 +480,8 @@ export default function AnimalDetailPage() {
                         <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px', padding: '6px 8px', background: 'var(--gray-50)', borderRadius: '6px' }}>
                           <span style={{ flex: 1 }}>{p.name}</span>
                           <span style={{ fontSize: '0.85rem', color: 'var(--gray-500)' }}>{parseFloat(p.selling_price || 0).toFixed(2)} EUR</span>
-                          <input type="number" min="1" step="1" style={{ width: '60px' }} className="form-input" value={p.quantity} onChange={(e) => updateOnsiteProductQty(idx, e.target.value)} />
+                          <input type="number" min="1" step="1" style={{ width: '60px' }} className="form-input" value={p.quantity} onChange={(e) => updateOnsiteProduct(idx, 'quantity', parseFloat(e.target.value) || 1)} />
+                          <input className="form-input" placeholder="N lot" style={{ width: '100px' }} value={p.lot_number || ''} onChange={(e) => updateOnsiteProduct(idx, 'lot_number', e.target.value)} />
                           <button type="button" className="btn btn-secondary btn-sm" onClick={() => removeOnsiteProduct(idx)} style={{ color: 'var(--danger)' }}>X</button>
                         </div>
                       ))}
@@ -510,7 +521,8 @@ export default function AnimalDetailPage() {
                         <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px', padding: '6px 8px', background: 'var(--gray-50)', borderRadius: '6px' }}>
                           <span style={{ flex: 1 }}>{p.name}</span>
                           <span style={{ fontSize: '0.85rem', color: 'var(--gray-500)' }}>{parseFloat(p.selling_price || 0).toFixed(2)} EUR</span>
-                          <input type="number" min="1" step="1" style={{ width: '60px' }} className="form-input" value={p.quantity} onChange={(e) => updateHtProductQty(idx, e.target.value)} />
+                          <input type="number" min="1" step="1" style={{ width: '60px' }} className="form-input" value={p.quantity} onChange={(e) => updateHtProduct(idx, 'quantity', parseFloat(e.target.value) || 1)} />
+                          <input className="form-input" placeholder="N lot" style={{ width: '100px' }} value={p.lot_number || ''} onChange={(e) => updateHtProduct(idx, 'lot_number', e.target.value)} />
                           <button type="button" className="btn btn-secondary btn-sm" onClick={() => removeHtProduct(idx)} style={{ color: 'var(--danger)' }}>X</button>
                         </div>
                       ))}
@@ -518,6 +530,12 @@ export default function AnimalDetailPage() {
                   )}
                 </div>
                 <div className="form-group"><label className="form-label">Notes supplementaires domicile</label><textarea className="form-textarea" value={recordForm.home_treatment} onChange={(e) => setRecordForm({ ...recordForm, home_treatment: e.target.value })} placeholder="Instructions pour le proprietaire: medicaments, posologie, soins..." /></div>
+
+                {/* Pharmacy prescription */}
+                <div style={{ borderTop: '1px solid var(--gray-200)', margin: '16px 0', paddingTop: '16px' }}>
+                  <h4 style={{ marginBottom: '8px' }}>Medicaments prescrits (pharmacie)</h4>
+                  <div className="form-group"><textarea className="form-textarea" value={recordForm.pharmacy_prescription} onChange={(e) => setRecordForm({ ...recordForm, pharmacy_prescription: e.target.value })} placeholder="Medicaments a aller chercher en pharmacie (ex: Augmentin 500mg, 2x/jour pendant 7 jours...)" /></div>
+                </div>
 
                 <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}><button type="submit" className="btn btn-primary">Enregistrer</button><button type="button" className="btn btn-secondary" onClick={() => setShowRecordForm(false)}>Annuler</button></div>
               </form>
@@ -533,7 +551,10 @@ export default function AnimalDetailPage() {
                   <div className={`timeline-dot ${r.record_type}`} />
                   <div className="card" style={{ marginBottom: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span className={`badge badge-${r.record_type === 'vaccination' ? 'green' : r.record_type === 'surgery' ? 'red' : 'blue'}`}>{recordTypeLabel[r.record_type] || r.record_type}</span>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <span className={`badge badge-${r.record_type === 'vaccination' ? 'green' : r.record_type === 'surgery' ? 'red' : 'blue'}`}>{recordTypeLabel[r.record_type] || r.record_type}</span>
+                        {r.veterinarian_name && <span style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>{r.veterinarian_name}</span>}
+                      </div>
                       <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>{new Date(r.created_at).toLocaleDateString('fr-FR')}</span>
                     </div>
                     {r.subjective && <p><strong>Motif:</strong> {r.subjective}</p>}
@@ -542,25 +563,35 @@ export default function AnimalDetailPage() {
                     {onsiteProds.length > 0 && (
                       <div style={{ background: 'var(--blue-50, var(--gray-50))', padding: '8px', borderRadius: '6px', marginTop: '4px' }}>
                         <strong style={{ fontSize: '0.85rem' }}>Actes sur place:</strong>
-                        {onsiteProds.map((p, i) => <span key={i} className="badge badge-blue" style={{ marginLeft: '6px' }}>{p.product_name || `#${p.product_id}`} x{parseFloat(p.quantity)}</span>)}
+                        {onsiteProds.map((p, i) => <span key={i} className="badge badge-blue" style={{ marginLeft: '6px' }}>{p.product_name || `#${p.product_id}`} x{parseFloat(p.quantity)}{p.lot_number ? ` (Lot: ${p.lot_number})` : ''}</span>)}
                       </div>
                     )}
                     {r.home_treatment && (
                       <div style={{ background: 'var(--gray-50)', padding: '8px', borderRadius: '6px', marginTop: '8px' }}>
                         <strong>Traitement a domicile:</strong>
                         <p style={{ whiteSpace: 'pre-wrap', margin: '4px 0' }}>{r.home_treatment}</p>
-                        <button className="btn btn-primary btn-sm" onClick={() => sendHomeTreatment(r)} style={{ marginTop: '4px' }}>Envoyer par email</button>
+                        {sentEmails[r.id] ? (
+                          <span className="badge badge-green" style={{ marginTop: '4px' }}>Email envoye</span>
+                        ) : (
+                          <button className="btn btn-primary btn-sm" onClick={() => sendHomeTreatment(r)} style={{ marginTop: '4px' }}>Envoyer par email</button>
+                        )}
                       </div>
                     )}
                     {homeProds.length > 0 && (
                       <div style={{ background: 'var(--gray-50)', padding: '8px', borderRadius: '6px', marginTop: '4px' }}>
                         <strong style={{ fontSize: '0.85rem' }}>Medicaments a domicile:</strong>
-                        {homeProds.map((p, i) => <span key={i} className="badge badge-amber" style={{ marginLeft: '6px' }}>{p.product_name || `#${p.product_id}`} x{parseFloat(p.quantity)}</span>)}
+                        {homeProds.map((p, i) => <span key={i} className="badge badge-amber" style={{ marginLeft: '6px' }}>{p.product_name || `#${p.product_id}`} x{parseFloat(p.quantity)}{p.lot_number ? ` (Lot: ${p.lot_number})` : ''}</span>)}
+                      </div>
+                    )}
+                    {r.pharmacy_prescription && (
+                      <div style={{ background: '#fef3c7', padding: '8px', borderRadius: '6px', marginTop: '4px' }}>
+                        <strong style={{ fontSize: '0.85rem' }}>Prescription pharmacie:</strong>
+                        <p style={{ whiteSpace: 'pre-wrap', margin: '4px 0', fontSize: '0.85rem' }}>{r.pharmacy_prescription}</p>
                       </div>
                     )}
                     {allProds.length > 0 && (
-                      createdInvoices[r.id] ? (
-                        <Link to={`/invoices/${createdInvoices[r.id]}`} className="btn btn-success btn-sm" style={{ marginTop: '8px', textDecoration: 'none' }}>
+                      (r.invoice_id || createdInvoices[r.id]) ? (
+                        <Link to={`/invoices/${r.invoice_id || createdInvoices[r.id]}`} className="btn btn-success btn-sm" style={{ marginTop: '8px', textDecoration: 'none' }}>
                           Facture creee
                         </Link>
                       ) : (

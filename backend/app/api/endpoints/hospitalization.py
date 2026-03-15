@@ -18,7 +18,7 @@ router = APIRouter(prefix="/hospitalization", tags=["Hospitalization"])
 
 
 def _enrich_hospitalization(hosp, db):
-    """Add animal_name, client_name, veterinarian_name to a hospitalization."""
+    """Add animal_name, client_name, veterinarian_name, and task completed_by_name."""
     data = HospitalizationResponse.model_validate(hosp).model_dump()
     animal = db.query(Animal).filter(Animal.id == hosp.animal_id).first()
     if animal:
@@ -30,6 +30,12 @@ def _enrich_hospitalization(hosp, db):
     vet = db.query(User).filter(User.id == hosp.veterinarian_id).first()
     if vet:
         data["veterinarian_name"] = f"Dr. {vet.last_name}"
+    # Enrich care tasks with completed_by_name
+    for task in data.get("care_tasks", []):
+        if task.get("completed_by_id"):
+            user = db.query(User).filter(User.id == task["completed_by_id"]).first()
+            if user:
+                task["completed_by_name"] = f"{user.first_name} {user.last_name}"
     return data
 
 
