@@ -67,7 +67,11 @@ export default function ProductDetailPage() {
     <div>
       <div className="page-header">
         <div className="page-header-left">
-          <Link to="/inventory" className="breadcrumb-link">Stocks & Pharmacie /</Link>
+          <nav className="page-breadcrumb">
+            <Link to="/inventory">Stocks & Pharmacie</Link>
+            <span className="breadcrumb-sep">/</span>
+            <span className="breadcrumb-current">{product.name}</span>
+          </nav>
           <h1 className="page-title">{product.name}</h1>
         </div>
         <div className="page-header-actions" style={{ display: 'flex', gap: '8px' }}>

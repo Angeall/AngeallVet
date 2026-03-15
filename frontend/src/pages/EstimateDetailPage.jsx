@@ -52,7 +52,11 @@ export default function EstimateDetailPage() {
     <div>
       <div className="page-header">
         <div className="page-header-left">
-          <Link to="/estimates" className="breadcrumb-link">Devis /</Link>
+          <nav className="page-breadcrumb">
+            <Link to="/estimates">Devis</Link>
+            <span className="breadcrumb-sep">/</span>
+            <span className="breadcrumb-current">{estimate.estimate_number}</span>
+          </nav>
           <h1 className="page-title">{estimate.estimate_number}</h1>
         </div>
         <div className="page-header-actions">

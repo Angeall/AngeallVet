@@ -201,7 +201,8 @@ def seed(db_url: str = None):
     url = db_url or settings.DATABASE_URL
     print(f"Connecting to database...")
     engine = create_engine(url, pool_pre_ping=True)
-    Base.metadata.create_all(bind=engine)
+    # Do NOT call Base.metadata.create_all() — the app manages schema.
+    # Tables must already exist (run the app at least once first).
     Session = sessionmaker(bind=engine)
     db = Session()
 

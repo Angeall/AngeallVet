@@ -9,8 +9,10 @@ export default function HospitalizationDetailPage() {
   const { id } = useParams();
   const [hosp, setHosp] = useState(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
+  const [showQuickLog, setShowQuickLog] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [taskForm, setTaskForm] = useState({ scheduled_at: '', task_type: 'medication', description: '' });
+  const [quickLogForm, setQuickLogForm] = useState({ task_type: 'medication', description: '', notes: '' });
   const [noteText, setNoteText] = useState('');
 
   const load = async () => {
@@ -51,6 +53,22 @@ export default function HospitalizationDetailPage() {
     } catch { toast.error('Erreur'); }
   };
 
+  const addQuickLog = async (e) => {
+    e.preventDefault();
+    try {
+      await hospitalizationAPI.addTask(id, {
+        scheduled_at: new Date().toISOString(),
+        task_type: quickLogForm.task_type,
+        description: quickLogForm.description,
+        is_completed: true,
+      });
+      toast.success('Soin enregistre dans l\'historique');
+      setShowQuickLog(false);
+      setQuickLogForm({ task_type: 'medication', description: '', notes: '' });
+      load();
+    } catch { toast.error('Erreur'); }
+  };
+
   const addNote = async (e) => {
     e.preventDefault();
     if (!noteText.trim()) return;
@@ -82,11 +100,17 @@ export default function HospitalizationDetailPage() {
     <div>
       <div className="page-header">
         <div className="page-header-left">
-          <Link to="/hospitalization" className="breadcrumb-link">Hospitalisation /</Link>
+          <nav className="page-breadcrumb">
+            <Link to="/hospitalization">Hospitalisation</Link>
+            <span className="breadcrumb-sep">/</span>
+            <span className="breadcrumb-current">{hosp.animal_name || `Animal #${hosp.animal_id}`}</span>
+          </nav>
           <h1 className="page-title">
-            <Link to={`/animals/${hosp.animal_id}`} className="table-link">Animal #{hosp.animal_id}</Link>
+            <Link to={`/animals/${hosp.animal_id}`} className="table-link">{hosp.animal_name || `Animal #${hosp.animal_id}`}</Link>
             {' '}- Cage {hosp.cage_number || 'N/A'}
           </h1>
+          {hosp.client_name && <span style={{ fontSize: '0.9rem', color: 'var(--gray-500)', marginLeft: '12px' }}>{hosp.client_name}</span>}
+          {hosp.veterinarian_name && <span style={{ fontSize: '0.9rem', color: 'var(--gray-500)', marginLeft: '12px' }}>{hosp.veterinarian_name}</span>}
         </div>
         <div className="page-header-actions">
           <span className={`badge badge-${hosp.status === 'active' ? 'green' : 'gray'}`} style={{ marginRight: '8px' }}>{hosp.status}</span>
@@ -162,9 +186,38 @@ export default function HospitalizationDetailPage() {
         )}
       </div>
 
-      {/* Completed tasks */}
+      {/* Completed tasks / History */}
       <div className="card">
-        <h3 className="card-title" style={{ marginBottom: '16px' }}>Historique des soins ({completedTasks.length})</h3>
+        <div className="card-header">
+          <h3 className="card-title">Historique des soins ({completedTasks.length})</h3>
+          {hosp.status === 'active' && (
+            <button className="btn btn-success btn-sm" onClick={() => setShowQuickLog(!showQuickLog)}>+ Enregistrer un soin realise</button>
+          )}
+        </div>
+
+        {showQuickLog && (
+          <div style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+            <form onSubmit={addQuickLog}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Type *</label>
+                  <select className="form-select" value={quickLogForm.task_type} onChange={(e) => setQuickLogForm({ ...quickLogForm, task_type: e.target.value })}>
+                    {Object.entries(taskTypeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ flex: 2 }}>
+                  <label className="form-label">Description *</label>
+                  <input className="form-input" value={quickLogForm.description} onChange={(e) => setQuickLogForm({ ...quickLogForm, description: e.target.value })} placeholder="Ex: Injection Metacam 0.5ml, prise de constantes..." required />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="submit" className="btn btn-success">Enregistrer dans l'historique</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowQuickLog(false)}>Annuler</button>
+              </div>
+            </form>
+          </div>
+        )}
+
         {completedTasks.length > 0 ? (
           <table>
             <thead><tr><th>Prevu</th><th>Realise</th><th>Type</th><th>Description</th><th>Notes</th></tr></thead>

@@ -232,7 +232,11 @@ export default function InvoiceDetailPage() {
     <div>
       <div className="page-header">
         <div className="page-header-left">
-          <Link to="/invoices" className="breadcrumb-link">Factures /</Link>
+          <nav className="page-breadcrumb">
+            <Link to="/invoices">Factures</Link>
+            <span className="breadcrumb-sep">/</span>
+            <span className="breadcrumb-current">{invoice.invoice_number}</span>
+          </nav>
           <h1 className="page-title">{invoice.invoice_number}</h1>
         </div>
         <div className="page-header-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>

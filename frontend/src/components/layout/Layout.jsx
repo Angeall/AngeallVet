@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { authAPI } from '../../services/api';
+import { authAPI, clientsAPI, animalsAPI, inventoryAPI } from '../../services/api';
 
 const navItems = [
   { section: 'Principal' },
@@ -60,6 +60,43 @@ export default function Layout({ children }) {
   const [showNotifs, setShowNotifs] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState({ clients: [], animals: [], products: [] });
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  // Global search debounce
+  useEffect(() => {
+    if (searchQuery.length < 2) {
+      setSearchResults({ clients: [], animals: [], products: [] });
+      setShowSearchResults(false);
+      return;
+    }
+    setSearchLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const [clientsRes, animalsRes, productsRes] = await Promise.all([
+          clientsAPI.list({ search: searchQuery, limit: 5 }),
+          animalsAPI.list({ search: searchQuery, limit: 5 }),
+          inventoryAPI.listProducts({ search: searchQuery, limit: 5 }),
+        ]);
+        setSearchResults({
+          clients: clientsRes.data || [],
+          animals: animalsRes.data || [],
+          products: productsRes.data || [],
+        });
+        setShowSearchResults(true);
+      } catch {}
+      setSearchLoading(false);
+    }, 300);
+    return () => { clearTimeout(timer); setSearchLoading(false); };
+  }, [searchQuery]);
+
+  const handleSearchNavigate = (path) => {
+    navigate(path);
+    setSearchQuery('');
+    setShowSearchResults(false);
+  };
 
   // Load permissions on mount
   useEffect(() => {
@@ -245,11 +282,92 @@ export default function Layout({ children }) {
             <button className="menu-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </button>
-            <div className="header-search">
+            <div className="header-search" style={{ position: 'relative' }}>
               <span className="header-search-icon">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               </span>
-              <input placeholder="Rechercher un client, animal, produit..." />
+              <input
+                placeholder="Rechercher un client, animal, produit..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => { if (searchQuery.length >= 2) setShowSearchResults(true); }}
+                onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+              />
+              {showSearchResults && (searchResults.clients.length > 0 || searchResults.animals.length > 0 || searchResults.products.length > 0) && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px',
+                  background: 'white', border: '1px solid var(--gray-200)', borderRadius: '8px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, maxHeight: '400px', overflowY: 'auto',
+                }}>
+                  {searchResults.clients.length > 0 && (
+                    <div>
+                      <div style={{ padding: '8px 12px', fontSize: '0.7rem', fontWeight: 600, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Clients</div>
+                      {searchResults.clients.map(c => (
+                        <div key={`c-${c.id}`} onMouseDown={() => handleSearchNavigate(`/clients/${c.id}`)}
+                          style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--gray-50)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--blue-50, #eff6ff)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 600, flexShrink: 0 }}>
+                            {(c.last_name || '')[0]}{(c.first_name || '')[0]}
+                          </span>
+                          <div>
+                            <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>{c.last_name} {c.first_name}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>{c.phone || c.email || ''}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {searchResults.animals.length > 0 && (
+                    <div>
+                      <div style={{ padding: '8px 12px', fontSize: '0.7rem', fontWeight: 600, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: '0.05em', borderTop: searchResults.clients.length > 0 ? '1px solid var(--gray-100)' : 'none' }}>Animaux</div>
+                      {searchResults.animals.map(a => (
+                        <div key={`a-${a.id}`} onMouseDown={() => handleSearchNavigate(`/animals/${a.id}`)}
+                          style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--gray-50)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--green-50, #f0fdf4)', color: 'var(--green, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', flexShrink: 0 }}>
+                            {icons.paw}
+                          </span>
+                          <div>
+                            <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>{a.name}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>{a.species}{a.breed ? ` - ${a.breed}` : ''}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {searchResults.products.length > 0 && (
+                    <div>
+                      <div style={{ padding: '8px 12px', fontSize: '0.7rem', fontWeight: 600, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: '0.05em', borderTop: (searchResults.clients.length > 0 || searchResults.animals.length > 0) ? '1px solid var(--gray-100)' : 'none' }}>Produits</div>
+                      {searchResults.products.map(p => (
+                        <div key={`p-${p.id}`} onMouseDown={() => handleSearchNavigate(`/inventory/${p.id}`)}
+                          style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--gray-50)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--amber-50, #fffbeb)', color: 'var(--amber, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', flexShrink: 0 }}>
+                            {icons.box}
+                          </span>
+                          <div>
+                            <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>{p.name}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>{p.product_type || ''}{p.selling_price ? ` - ${parseFloat(p.selling_price).toFixed(2)} EUR` : ''}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {showSearchResults && searchQuery.length >= 2 && searchResults.clients.length === 0 && searchResults.animals.length === 0 && searchResults.products.length === 0 && !searchLoading && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px',
+                  background: 'white', border: '1px solid var(--gray-200)', borderRadius: '8px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, padding: '16px',
+                  textAlign: 'center', color: 'var(--gray-400)', fontSize: '0.85rem',
+                }}>
+                  Aucun resultat pour "{searchQuery}"
+                </div>
+              )}
             </div>
           </div>
           <div className="header-right" style={{ position: 'relative' }}>

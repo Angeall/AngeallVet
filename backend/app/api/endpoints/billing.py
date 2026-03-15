@@ -41,6 +41,16 @@ def _calculate_invoice_totals(lines):
     return subtotal, total_vat, subtotal + total_vat
 
 
+def _enrich_invoice(inv, db):
+    """Add client_name to an invoice."""
+    from app.schemas.billing import InvoiceResponse as IR
+    data = IR.model_validate(inv).model_dump()
+    client = db.query(Client).filter(Client.id == inv.client_id).first()
+    if client:
+        data["client_name"] = f"{client.last_name} {client.first_name}"
+    return data
+
+
 # --- Invoices ---
 @router.get("/invoices", response_model=list[InvoiceResponse])
 def list_invoices(
@@ -48,6 +58,7 @@ def list_invoices(
     status: Optional[str] = Query(None),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
+    search: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_tenant_db),
@@ -62,7 +73,17 @@ def list_invoices(
         query = query.filter(Invoice.issue_date >= date_from)
     if date_to:
         query = query.filter(Invoice.issue_date <= date_to)
-    return query.order_by(Invoice.created_at.desc()).offset(skip).limit(limit).all()
+    if search:
+        # Search by invoice number or client name
+        client_ids = db.query(Client.id).filter(
+            (Client.last_name.ilike(f"%{search}%")) | (Client.first_name.ilike(f"%{search}%"))
+        ).all()
+        client_id_list = [c[0] for c in client_ids]
+        query = query.filter(
+            (Invoice.invoice_number.ilike(f"%{search}%")) | (Invoice.client_id.in_(client_id_list))
+        )
+    invoices = query.order_by(Invoice.created_at.desc()).offset(skip).limit(limit).all()
+    return [_enrich_invoice(inv, db) for inv in invoices]
 
 
 @router.post("/invoices", response_model=InvoiceResponse, status_code=201)

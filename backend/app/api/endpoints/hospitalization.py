@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -6,6 +7,8 @@ from app.api.deps import get_tenant_db
 from app.core.security import get_current_user, require_roles
 from app.models.user import User, UserRole
 from app.models.hospitalization import Hospitalization, CareTask, HospitalizationStatus
+from app.models.animal import Animal
+from app.models.client import Client
 from app.schemas.hospitalization import (
     HospitalizationCreate, HospitalizationUpdate, HospitalizationResponse,
     CareTaskCreate, CareTaskUpdate, CareTaskResponse,
@@ -14,16 +17,36 @@ from app.schemas.hospitalization import (
 router = APIRouter(prefix="/hospitalization", tags=["Hospitalization"])
 
 
+def _enrich_hospitalization(hosp, db):
+    """Add animal_name, client_name, veterinarian_name to a hospitalization."""
+    data = HospitalizationResponse.model_validate(hosp).model_dump()
+    animal = db.query(Animal).filter(Animal.id == hosp.animal_id).first()
+    if animal:
+        data["animal_name"] = animal.name
+        data["client_id"] = animal.client_id
+        client = db.query(Client).filter(Client.id == animal.client_id).first()
+        if client:
+            data["client_name"] = f"{client.last_name} {client.first_name}"
+    vet = db.query(User).filter(User.id == hosp.veterinarian_id).first()
+    if vet:
+        data["veterinarian_name"] = f"Dr. {vet.last_name}"
+    return data
+
+
 @router.get("", response_model=list[HospitalizationResponse])
 def list_hospitalizations(
     active_only: bool = Query(True),
+    animal_id: Optional[int] = Query(None),
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Hospitalization)
     if active_only:
         query = query.filter(Hospitalization.status == HospitalizationStatus.ACTIVE)
-    return query.order_by(Hospitalization.admitted_at.desc()).all()
+    if animal_id is not None:
+        query = query.filter(Hospitalization.animal_id == animal_id)
+    hosps = query.order_by(Hospitalization.admitted_at.desc()).all()
+    return [_enrich_hospitalization(h, db) for h in hosps]
 
 
 @router.post("", response_model=HospitalizationResponse, status_code=201)
@@ -51,7 +74,7 @@ def create_hospitalization(
 
     db.commit()
     db.refresh(hosp)
-    return hosp
+    return _enrich_hospitalization(hosp, db)
 
 
 @router.get("/{hosp_id}", response_model=HospitalizationResponse)
@@ -63,7 +86,7 @@ def get_hospitalization(
     hosp = db.query(Hospitalization).filter(Hospitalization.id == hosp_id).first()
     if not hosp:
         raise HTTPException(status_code=404, detail="Hospitalisation non trouvée")
-    return hosp
+    return _enrich_hospitalization(hosp, db)
 
 
 @router.put("/{hosp_id}", response_model=HospitalizationResponse)
@@ -85,7 +108,7 @@ def update_hospitalization(
 
     db.commit()
     db.refresh(hosp)
-    return hosp
+    return _enrich_hospitalization(hosp, db)
 
 
 # --- Care Tasks ---
@@ -101,6 +124,10 @@ def add_care_task(
         raise HTTPException(status_code=404, detail="Hospitalisation non trouvée")
 
     task = CareTask(hospitalization_id=hosp_id, **data.model_dump())
+    if data.is_completed:
+        task.is_completed = True
+        task.completed_at = datetime.now(timezone.utc)
+        task.completed_by_id = current_user.id
     db.add(task)
     db.commit()
     db.refresh(task)

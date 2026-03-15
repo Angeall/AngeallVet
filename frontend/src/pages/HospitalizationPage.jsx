@@ -58,9 +58,11 @@ export default function HospitalizationPage() {
               <div>
                 <h3 className="card-title">
                   <Link to={`/hospitalization/${h.id}`} className="table-link">
-                    Animal #{h.animal_id} - Cage {h.cage_number || 'N/A'}
+                    {h.animal_name || `Animal #${h.animal_id}`} - Cage {h.cage_number || 'N/A'}
                   </Link>
                 </h3>
+                {h.client_name && <span style={{ fontSize: '0.85rem', color: 'var(--gray-500)', marginLeft: '8px' }}>{h.client_name}</span>}
+                {h.veterinarian_name && <span style={{ fontSize: '0.85rem', color: 'var(--gray-500)', marginLeft: '8px' }}>{h.veterinarian_name}</span>}
                 <span className={`badge badge-${h.status === 'active' ? 'green' : 'gray'}`}>{h.status}</span>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>

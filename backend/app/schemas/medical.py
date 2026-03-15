@@ -61,6 +61,7 @@ class HomeTreatmentProductResponse(BaseModel):
     product_id: int
     quantity: Decimal
     treatment_location: str = "home"
+    product_name: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { billingAPI, clientsAPI, animalsAPI, inventoryAPI, settingsAPI } from '../services/api';
 import toast from 'react-hot-toast';
@@ -20,7 +20,11 @@ export default function InvoicesPage() {
     client_id: '', animal_id: '', lines: [{ description: '', quantity: '1', unit_price: '', vat_rate: '20.00', product_id: null }],
   });
 
-  // Client search
+  // Filters
+  const [filterSearch, setFilterSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  // Client search (form)
   const [clientSearch, setClientSearch] = useState('');
   const [clientResults, setClientResults] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
@@ -30,15 +34,17 @@ export default function InvoicesPage() {
   const [productSearches, setProductSearches] = useState({});
   const [productResults, setProductResults] = useState({});
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await billingAPI.listInvoices({});
-        setInvoices(res.data);
-      } catch {
-        toast.error('Erreur de chargement');
-      }
+  const loadInvoices = useCallback(async (params = {}) => {
+    try {
+      const res = await billingAPI.listInvoices(params);
+      setInvoices(res.data);
+    } catch {
+      toast.error('Erreur de chargement');
     }
+  }, []);
+
+  useEffect(() => {
+    loadInvoices({});
     async function loadDefaultVat() {
       try {
         const res = await settingsAPI.getVatRates();
@@ -46,9 +52,19 @@ export default function InvoicesPage() {
         if (def) setDefaultVatRate(parseFloat(def.rate).toFixed(2));
       } catch {}
     }
-    load();
     loadDefaultVat();
-  }, []);
+  }, [loadInvoices]);
+
+  // Debounced filter
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const params = {};
+      if (filterSearch) params.search = filterSearch;
+      if (filterStatus) params.status = filterStatus;
+      loadInvoices(params);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [filterSearch, filterStatus, loadInvoices]);
 
   // Client search debounce
   useEffect(() => {
@@ -113,7 +129,6 @@ export default function InvoicesPage() {
     if (form.lines.length <= 1) return;
     const lines = form.lines.filter((_, i) => i !== idx);
     setForm({ ...form, lines });
-    // Clean up product search state
     setProductSearches(prev => { const n = { ...prev }; delete n[idx]; return n; });
     setProductResults(prev => { const n = { ...prev }; delete n[idx]; return n; });
   };
@@ -149,8 +164,7 @@ export default function InvoicesPage() {
       setClientSearch('');
       setAnimalOptions([]);
       setForm({ client_id: '', animal_id: '', lines: [{ description: '', quantity: '1', unit_price: '', vat_rate: defaultVatRate, product_id: null }] });
-      const res = await billingAPI.listInvoices({});
-      setInvoices(res.data);
+      loadInvoices({});
     } catch {
       toast.error('Erreur lors de la creation');
     }
@@ -266,6 +280,19 @@ export default function InvoicesPage() {
       )}
 
       <div className="card">
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+          <input
+            className="form-input"
+            placeholder="Rechercher par nom client ou n° facture..."
+            value={filterSearch}
+            onChange={(e) => setFilterSearch(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <select className="form-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ maxWidth: '180px' }}>
+            <option value="">Tous les statuts</option>
+            {Object.entries(statusLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
         <div className="table-container">
           <table>
             <thead>
@@ -278,7 +305,7 @@ export default function InvoicesPage() {
                     <Link to={`/invoices/${inv.id}`} className="table-link">{inv.invoice_number}</Link>
                   </td>
                   <td>{inv.issue_date}</td>
-                  <td>{inv.client_id}</td>
+                  <td>{inv.client_name || `#${inv.client_id}`}</td>
                   <td>{parseFloat(inv.subtotal).toFixed(2)}</td>
                   <td>{parseFloat(inv.total_vat).toFixed(2)}</td>
                   <td style={{ fontWeight: 600 }}>{parseFloat(inv.total).toFixed(2)} EUR</td>

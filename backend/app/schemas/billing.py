@@ -52,6 +52,7 @@ class InvoiceResponse(BaseModel):
     lines: List[InvoiceLineResponse] = []
     payments: List["PaymentResponse"] = []
     created_at: datetime
+    client_name: Optional[str] = None
 
     class Config:
         from_attributes = True

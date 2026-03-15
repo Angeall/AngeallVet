@@ -26,6 +26,16 @@ from app.schemas.billing import InvoiceResponse
 router = APIRouter(prefix="/medical", tags=["Medical Records"])
 
 
+def _enrich_record(record, db):
+    """Add product_name to each home_treatment_product."""
+    data = MedicalRecordResponse.model_validate(record).model_dump()
+    for p in data.get("home_treatment_products", []):
+        product = db.query(Product).filter(Product.id == p["product_id"]).first()
+        if product:
+            p["product_name"] = product.name
+    return data
+
+
 @router.get("/records", response_model=list[MedicalRecordResponse])
 def list_records(
     animal_id: Optional[int] = Query(None),
@@ -40,7 +50,8 @@ def list_records(
         query = query.filter(MedicalRecord.animal_id == animal_id)
     if record_type:
         query = query.filter(MedicalRecord.record_type == record_type)
-    return query.order_by(MedicalRecord.created_at.desc()).offset(skip).limit(limit).all()
+    records = query.order_by(MedicalRecord.created_at.desc()).offset(skip).limit(limit).all()
+    return [_enrich_record(r, db) for r in records]
 
 
 @router.post("/records", response_model=MedicalRecordResponse, status_code=201)
@@ -99,7 +110,7 @@ def create_record(
 
     db.commit()
     db.refresh(record)
-    return record
+    return _enrich_record(record, db)
 
 
 @router.get("/records/{record_id}", response_model=MedicalRecordResponse)
@@ -111,7 +122,7 @@ def get_record(
     record = db.query(MedicalRecord).filter(MedicalRecord.id == record_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="Dossier medical non trouve")
-    return record
+    return _enrich_record(record, db)
 
 
 @router.post("/records/{record_id}/create-invoice", response_model=InvoiceResponse, status_code=201)

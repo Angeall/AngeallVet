@@ -165,7 +165,11 @@ export default function ClientDetailPage() {
     <div>
       <div className="page-header">
         <div className="page-header-left">
-          <Link to="/clients" className="breadcrumb-link">Clients /</Link>
+          <nav className="page-breadcrumb">
+            <Link to="/clients">Clients</Link>
+            <span className="breadcrumb-sep">/</span>
+            <span className="breadcrumb-current">{client.last_name} {client.first_name}</span>
+          </nav>
           <h1 className="page-title">{client.last_name} {client.first_name}</h1>
         </div>
         <div className="page-header-actions">
