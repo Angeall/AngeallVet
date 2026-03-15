@@ -4,16 +4,82 @@ from sqlalchemy import or_
 from typing import Optional
 
 from app.api.deps import get_tenant_db
-from app.core.security import get_current_user
-from app.models.user import User
-from app.models.animal import Animal, AnimalAlert, WeightRecord
+from app.core.security import get_current_user, require_roles
+from app.models.user import User, UserRole
+from app.models.animal import Animal, AnimalAlert, WeightRecord, SpeciesRecord
+from app.models.association import Association
 from app.schemas.animal import (
     AnimalCreate, AnimalUpdate, AnimalResponse,
     AnimalAlertCreate, AnimalAlertResponse,
     WeightRecordCreate, WeightRecordResponse,
+    SpeciesCreate, SpeciesResponse,
 )
 
 router = APIRouter(prefix="/animals", tags=["Animals"])
+
+
+def _enrich_animal(animal):
+    """Add association_name to animal object for serialization."""
+    if animal.association_id and animal.association:
+        animal.association_name = animal.association.name
+    else:
+        animal.association_name = None
+    return animal
+
+
+# --- Species ---
+@router.get("/species", response_model=list[SpeciesResponse])
+def list_species(
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(get_current_user),
+):
+    return db.query(SpeciesRecord).filter(SpeciesRecord.is_active == True).order_by(SpeciesRecord.display_order, SpeciesRecord.label).all()
+
+
+@router.post("/species", response_model=SpeciesResponse, status_code=201)
+def create_species(
+    data: SpeciesCreate,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+):
+    existing = db.query(SpeciesRecord).filter(SpeciesRecord.code == data.code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Ce code espèce existe déjà")
+    species = SpeciesRecord(**data.model_dump())
+    db.add(species)
+    db.commit()
+    db.refresh(species)
+    return species
+
+
+@router.put("/species/{species_id}", response_model=SpeciesResponse)
+def update_species(
+    species_id: int,
+    data: SpeciesCreate,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+):
+    species = db.query(SpeciesRecord).filter(SpeciesRecord.id == species_id).first()
+    if not species:
+        raise HTTPException(status_code=404, detail="Espèce non trouvée")
+    for field, value in data.model_dump().items():
+        setattr(species, field, value)
+    db.commit()
+    db.refresh(species)
+    return species
+
+
+@router.delete("/species/{species_id}", status_code=204)
+def delete_species(
+    species_id: int,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+):
+    species = db.query(SpeciesRecord).filter(SpeciesRecord.id == species_id).first()
+    if not species:
+        raise HTTPException(status_code=404, detail="Espèce non trouvée")
+    species.is_active = False
+    db.commit()
 
 
 @router.get("", response_model=list[AnimalResponse])
@@ -40,7 +106,8 @@ def list_animals(
                 Animal.tattoo_number.ilike(pattern),
             )
         )
-    return query.order_by(Animal.name).offset(skip).limit(limit).all()
+    animals = query.order_by(Animal.name).offset(skip).limit(limit).all()
+    return [_enrich_animal(a) for a in animals]
 
 
 @router.post("", response_model=AnimalResponse, status_code=201)
@@ -53,7 +120,7 @@ def create_animal(
     db.add(animal)
     db.commit()
     db.refresh(animal)
-    return animal
+    return _enrich_animal(animal)
 
 
 @router.get("/{animal_id}", response_model=AnimalResponse)
@@ -65,7 +132,7 @@ def get_animal(
     animal = db.query(Animal).filter(Animal.id == animal_id).first()
     if not animal:
         raise HTTPException(status_code=404, detail="Animal non trouvé")
-    return animal
+    return _enrich_animal(animal)
 
 
 @router.put("/{animal_id}", response_model=AnimalResponse)
@@ -84,7 +151,7 @@ def update_animal(
 
     db.commit()
     db.refresh(animal)
-    return animal
+    return _enrich_animal(animal)
 
 
 # --- Alerts ---
@@ -134,6 +201,23 @@ def get_weights(
         .order_by(WeightRecord.recorded_at.desc())
         .all()
     )
+
+
+@router.get("/{animal_id}/weights/latest", response_model=WeightRecordResponse)
+def get_latest_weight(
+    animal_id: int,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = (
+        db.query(WeightRecord)
+        .filter(WeightRecord.animal_id == animal_id)
+        .order_by(WeightRecord.recorded_at.desc(), WeightRecord.id.desc())
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Aucun poids enregistre")
+    return record
 
 
 @router.post("/{animal_id}/weights", response_model=WeightRecordResponse, status_code=201)

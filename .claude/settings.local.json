@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find /d/Antho/Documents/Projets/AngeallVet/frontend -type f -name *.js -o -name *.jsx -o -name *.ts -o -name *.tsx)"
+      "Bash(find /d/Antho/Documents/Projets/AngeallVet/frontend -type f -name *.js -o -name *.jsx -o -name *.ts -o -name *.tsx)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"require_roles.*ADMIN\\\\|UserRole.ADMIN\" /c/Users/AnthonyRouneau/IdeaProjects/AngeallVet/backend/app/api/endpoints/*.py)"
     ]
   }
 }

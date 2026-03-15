@@ -12,8 +12,10 @@ const navItems = [
   { path: '/clients', label: 'Clients', icon: 'users', perm: 'clients' },
   { path: '/animals', label: 'Animaux', icon: 'paw', perm: 'animals' },
   { path: '/hospitalization', label: 'Hospitalisation', icon: 'hospital', perm: 'hospitalization' },
+  { path: '/associations', label: 'Associations', icon: 'heart', perm: 'animals' },
   { section: 'Gestion' },
   { path: '/inventory', label: 'Stocks & Pharmacie', icon: 'box', perm: 'inventory' },
+  { path: '/controlled-substances', label: 'Stupefiants', icon: 'shield', perm: 'inventory' },
   { path: '/invoices', label: 'Factures', icon: 'receipt', perm: 'invoices' },
   { path: '/estimates', label: 'Devis', icon: 'edit', perm: 'estimates' },
   { path: '/sales', label: 'Vente comptoir', icon: 'cart', perm: 'sales' },
@@ -23,6 +25,7 @@ const navItems = [
   { path: '/communications', label: 'Communications', icon: 'mail', perm: 'communications' },
   { section: 'Administration' },
   { path: '/users', label: 'Utilisateurs', icon: 'team', perm: 'users' },
+  { path: '/settings', label: 'Parametres', icon: 'gear', perm: 'users' },
 ];
 
 const icons = {
@@ -41,18 +44,22 @@ const icons = {
   alert: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
   chart: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
   team: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  shield: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+  heart: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
+  gear: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
 };
 
 const roleLabels = { admin: 'Administrateur', veterinarian: 'Veterinaire', assistant: 'ASV', accountant: 'Comptable', guest: 'Invite' };
 
 export default function Layout({ children }) {
-  const { user, logout } = useAuth();
+  const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [permissions, setPermissions] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Load permissions on mount
   useEffect(() => {
@@ -104,6 +111,16 @@ export default function Layout({ children }) {
 
   const initials = user ? `${(user.first_name || '')[0] || ''}${(user.last_name || '')[0] || ''}`.toUpperCase() : '?';
 
+  const sidebarColor = user?.sidenav_color || null;
+
+  const handleColorChange = async (color) => {
+    try {
+      const res = await authAPI.updateMe({ sidenav_color: color });
+      setUser(res.data);
+    } catch {}
+    setShowColorPicker(false);
+  };
+
   // Filter nav items based on permissions
   const filteredNavItems = navItems.filter(item => {
     if (item.section) return true;
@@ -125,7 +142,7 @@ export default function Layout({ children }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 49 }} onClick={() => setSidebarOpen(false)} />
       )}
 
-      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`} style={sidebarColor ? { background: sidebarColor } : undefined}>
         <div className="sidebar-header">
           <a href="/" className="sidebar-logo">
             <div className="sidebar-logo-icon">
@@ -156,16 +173,68 @@ export default function Layout({ children }) {
           )}
         </nav>
 
-        <div className="sidebar-footer">
-          <div className="sidebar-user" onClick={logout} title="Se deconnecter">
-            <div className="sidebar-avatar">{initials}</div>
-            <div className="sidebar-user-info">
-              <div className="sidebar-user-name">{user?.first_name} {user?.last_name}</div>
-              <div className="sidebar-user-role">{roleLabels[user?.role] || user?.role}</div>
+        <div className="sidebar-footer" style={{ position: 'relative' }}>
+          {showColorPicker && (
+            <div style={{
+              position: 'absolute', bottom: '100%', left: '8px', right: '8px', marginBottom: '8px',
+              background: 'var(--gray-900, #111)', border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '8px', padding: '12px', zIndex: 60,
+            }}>
+              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '8px' }}>Couleur du menu</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {['#0f172a','#1e3a5f','#1a1a2e','#2d1b69','#14532d','#713f12','#7f1d1d','#831843','#134e4a','#374151'].map(c => (
+                  <button
+                    key={c}
+                    onClick={() => handleColorChange(c)}
+                    style={{
+                      width: '28px', height: '28px', borderRadius: '50%', background: c,
+                      border: sidebarColor === c ? '2px solid white' : '2px solid transparent',
+                      cursor: 'pointer', transition: 'transform 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.15)'}
+                    onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                    title={c}
+                  />
+                ))}
+                <button
+                  onClick={() => handleColorChange(null)}
+                  style={{
+                    width: '28px', height: '28px', borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #ccc 50%, #666 50%)',
+                    border: !sidebarColor ? '2px solid white' : '2px solid transparent',
+                    cursor: 'pointer', fontSize: '0.6rem', color: 'white',
+                  }}
+                  title="Par defaut"
+                />
+              </div>
             </div>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div className="sidebar-user" onClick={logout} title="Se deconnecter" style={{ flex: 1 }}>
+              <div className="sidebar-avatar">{initials}</div>
+              <div className="sidebar-user-info">
+                <div className="sidebar-user-name">{user?.first_name} {user?.last_name}</div>
+                <div className="sidebar-user-role">{roleLabels[user?.role] || user?.role}</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowColorPicker(!showColorPicker); }}
+              title="Couleur du menu"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: '6px',
+                borderRadius: '6px', display: 'flex', alignItems: 'center',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12" r="2.5"/>
+                <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+              </svg>
+            </button>
           </div>
         </div>
       </aside>

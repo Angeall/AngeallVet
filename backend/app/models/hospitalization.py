@@ -20,8 +20,8 @@ class Hospitalization(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     animal_id = Column(Integer, ForeignKey("animals.id"), nullable=False, index=True)
-    veterinarian_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    status = Column(SAEnum(HospitalizationStatus), default=HospitalizationStatus.ACTIVE)
+    veterinarian_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(SAEnum(HospitalizationStatus), default=HospitalizationStatus.ACTIVE, index=True)
     reason = Column(Text, nullable=False)
     admitted_at = Column(DateTime(timezone=True), server_default=func.now())
     discharged_at = Column(DateTime(timezone=True))
@@ -37,13 +37,13 @@ class CareTask(Base):
     __tablename__ = "care_tasks"
 
     id = Column(Integer, primary_key=True, index=True)
-    hospitalization_id = Column(Integer, ForeignKey("hospitalizations.id"), nullable=False)
-    scheduled_at = Column(DateTime(timezone=True), nullable=False)
+    hospitalization_id = Column(Integer, ForeignKey("hospitalizations.id"), nullable=False, index=True)
+    scheduled_at = Column(DateTime(timezone=True), nullable=False, index=True)
     task_type = Column(String(50), nullable=False)  # medication, vitals, feeding, observation
     description = Column(Text, nullable=False)
     is_completed = Column(Boolean, default=False)
     completed_at = Column(DateTime(timezone=True))
-    completed_by_id = Column(Integer, ForeignKey("users.id"))
+    completed_by_id = Column(Integer, ForeignKey("users.id"), index=True)
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

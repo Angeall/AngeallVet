@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
-from app.models.animal import Species, Sex, VitalStatus
+from app.models.animal import Sex, VitalStatus
 
 
 class AnimalAlertResponse(BaseModel):
@@ -35,9 +35,23 @@ class WeightRecordCreate(BaseModel):
     weight_kg: Decimal
 
 
+class SpeciesCreate(BaseModel):
+    code: str
+    label: str
+    display_order: int = 0
+
+
+class SpeciesResponse(SpeciesCreate):
+    id: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
 class AnimalBase(BaseModel):
     name: str
-    species: Species
+    species: str
     breed: Optional[str] = None
     sex: Sex = Sex.UNKNOWN
     date_of_birth: Optional[date] = None
@@ -50,11 +64,12 @@ class AnimalBase(BaseModel):
 
 class AnimalCreate(AnimalBase):
     client_id: int
+    association_id: Optional[int] = None
 
 
 class AnimalUpdate(BaseModel):
     name: Optional[str] = None
-    species: Optional[Species] = None
+    species: Optional[str] = None
     breed: Optional[str] = None
     sex: Optional[Sex] = None
     date_of_birth: Optional[date] = None
@@ -66,6 +81,7 @@ class AnimalUpdate(BaseModel):
     vital_status_date: Optional[date] = None
     is_deceased: Optional[bool] = None
     deceased_date: Optional[date] = None
+    association_id: Optional[int] = None
     notes: Optional[str] = None
 
 
@@ -74,6 +90,8 @@ class AnimalResponse(AnimalBase):
     client_id: int
     vital_status: VitalStatus = VitalStatus.ALIVE
     vital_status_date: Optional[date] = None
+    association_id: Optional[int] = None
+    association_name: Optional[str] = None
     is_deceased: bool
     photo_url: Optional[str] = None
     created_at: datetime

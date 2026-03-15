@@ -24,12 +24,14 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
     phone: Optional[str] = None
     is_active: Optional[bool] = None
+    sidenav_color: Optional[str] = None
 
 
 class UserResponse(UserBase):
     id: int
     supabase_uid: str
     is_active: bool
+    sidenav_color: Optional[str] = None
     created_at: datetime
 
     class Config:

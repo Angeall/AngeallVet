@@ -13,7 +13,9 @@ from app.core.database import Base, _default_engine as engine, _default_session_
 from app.api.endpoints import (
     auth, clients, animals, appointments,
     medical, inventory, billing, communication, hospitalization,
+    controlled_substances, associations,
 )
+from app.api.endpoints import settings as settings_endpoints
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -54,6 +56,9 @@ app.include_router(inventory.router, prefix=API_PREFIX)
 app.include_router(billing.router, prefix=API_PREFIX)
 app.include_router(communication.router, prefix=API_PREFIX)
 app.include_router(hospitalization.router, prefix=API_PREFIX)
+app.include_router(settings_endpoints.router, prefix=API_PREFIX)
+app.include_router(controlled_substances.router, prefix=API_PREFIX)
+app.include_router(associations.router, prefix=API_PREFIX)
 
 # Serve uploads
 upload_dir = settings.UPLOAD_DIR
@@ -79,6 +84,15 @@ def _ensure_schema(db_engine):
         ("animals", "vital_status", "ALTER TABLE animals ADD COLUMN vital_status VARCHAR(20) NOT NULL DEFAULT 'alive'"),
         ("animals", "vital_status_date", "ALTER TABLE animals ADD COLUMN vital_status_date DATE"),
         ("products", "is_shortcut", "ALTER TABLE products ADD COLUMN is_shortcut BOOLEAN NOT NULL DEFAULT false"),
+        ("clients", "vat_number", "ALTER TABLE clients ADD COLUMN vat_number VARCHAR(50)"),
+        ("products", "is_controlled_substance", "ALTER TABLE products ADD COLUMN is_controlled_substance BOOLEAN NOT NULL DEFAULT false"),
+        ("animals", "association_id", "ALTER TABLE animals ADD COLUMN association_id INTEGER REFERENCES associations(id)"),
+        ("reminder_rules", "postal_template", "ALTER TABLE reminder_rules ADD COLUMN postal_template TEXT"),
+        ("medical_record_products", "treatment_location", "ALTER TABLE medical_record_products ADD COLUMN treatment_location VARCHAR(20) NOT NULL DEFAULT 'home'"),
+        ("consultation_templates", "home_treatment", "ALTER TABLE consultation_templates ADD COLUMN home_treatment TEXT"),
+        ("controlled_substance_entries", "dosage", "ALTER TABLE controlled_substance_entries ADD COLUMN dosage VARCHAR(200)"),
+        ("controlled_substance_entries", "total_delivered", "ALTER TABLE controlled_substance_entries ADD COLUMN total_delivered NUMERIC(10,2)"),
+        ("users", "sidenav_color", "ALTER TABLE users ADD COLUMN sidenav_color VARCHAR(7)"),
     ]
     with db_engine.connect() as conn:
         inspector = inspect(db_engine)
@@ -132,6 +146,19 @@ def on_startup():
         central.close()
     except Exception as e:
         logger.warning("Could not update tenant schemas: %s", e)
+
+    # 4. Seed default species if table is empty
+    try:
+        from app.models.animal import SpeciesRecord, DEFAULT_SPECIES
+        db = _default_session_factory()
+        if db.query(SpeciesRecord).count() == 0:
+            for code, label, order in DEFAULT_SPECIES:
+                db.add(SpeciesRecord(code=code, label=label, display_order=order))
+            db.commit()
+            logger.info("Seeded default species")
+        db.close()
+    except Exception as e:
+        logger.warning("Could not seed species: %s", e)
 
     # Warn loudly about missing Supabase configuration
     missing = []

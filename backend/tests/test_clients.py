@@ -77,6 +77,57 @@ def test_delete_client(client, auth_headers):
     assert all(c["id"] != client_id for c in response.json())
 
 
+def test_create_client_minimal(client, auth_headers):
+    """Client can be created with only first_name and last_name."""
+    response = client.post("/api/v1/clients", headers=auth_headers, json={
+        "first_name": "Pierre",
+        "last_name": "Durand",
+    })
+    assert response.status_code == 201
+    data = response.json()
+    assert data["first_name"] == "Pierre"
+    assert data["email"] is None
+    assert data["phone"] is None
+
+
+def test_create_client_empty_email(client, auth_headers):
+    """Empty email string should be converted to None, not rejected."""
+    response = client.post("/api/v1/clients", headers=auth_headers, json={
+        "first_name": "Marie",
+        "last_name": "Blanc",
+        "email": "",
+        "phone": "",
+    })
+    assert response.status_code == 201
+    data = response.json()
+    assert data["email"] is None
+    assert data["phone"] is None
+
+
+def test_create_client_with_vat_number(client, auth_headers):
+    """Client can be created with a VAT number for B2B invoicing."""
+    response = client.post("/api/v1/clients", headers=auth_headers, json={
+        "first_name": "Entreprise",
+        "last_name": "SAS",
+        "vat_number": "FR12345678901",
+    })
+    assert response.status_code == 201
+    assert response.json()["vat_number"] == "FR12345678901"
+
+
+def test_update_client_vat_number(client, auth_headers):
+    """VAT number can be updated on an existing client."""
+    res = client.post("/api/v1/clients", headers=auth_headers, json={
+        "first_name": "Test", "last_name": "Client",
+    })
+    client_id = res.json()["id"]
+    response = client.put(f"/api/v1/clients/{client_id}", headers=auth_headers, json={
+        "vat_number": "FR98765432109",
+    })
+    assert response.status_code == 200
+    assert response.json()["vat_number"] == "FR98765432109"
+
+
 def test_merge_clients(client, auth_headers):
     res1 = client.post("/api/v1/clients", headers=auth_headers, json={
         "first_name": "Source", "last_name": "Client",

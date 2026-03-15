@@ -36,7 +36,7 @@ class Appointment(Base):
     animal_id = Column(Integer, ForeignKey("animals.id"), index=True)
     veterinarian_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     appointment_type = Column(SAEnum(AppointmentType), nullable=False, default=AppointmentType.CONSULTATION)
-    status = Column(SAEnum(AppointmentStatus), nullable=False, default=AppointmentStatus.SCHEDULED)
+    status = Column(SAEnum(AppointmentStatus), nullable=False, default=AppointmentStatus.SCHEDULED, index=True)
     start_time = Column(DateTime(timezone=True), nullable=False, index=True)
     end_time = Column(DateTime(timezone=True), nullable=False)
     reason = Column(Text)

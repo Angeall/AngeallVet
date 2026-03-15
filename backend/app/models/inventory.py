@@ -34,8 +34,9 @@ class Product(Base):
     notes = Column(Text)
     requires_prescription = Column(Boolean, default=False)
     is_shortcut = Column(Boolean, default=False)
+    is_controlled_substance = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
-    supplier_id = Column(Integer, ForeignKey("suppliers.id"))
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -61,13 +62,13 @@ class StockMovement(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
-    lot_id = Column(Integer, ForeignKey("product_lots.id"))
+    lot_id = Column(Integer, ForeignKey("product_lots.id"), index=True)
     movement_type = Column(String(20), nullable=False)  # in, out, adjustment
     quantity = Column(Numeric(10, 2), nullable=False)
     reason = Column(String(200))
     reference_type = Column(String(50))  # invoice, prescription, manual
     reference_id = Column(Integer)
-    performed_by_id = Column(Integer, ForeignKey("users.id"))
+    performed_by_id = Column(Integer, ForeignKey("users.id"), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -91,14 +92,14 @@ class PurchaseOrder(Base):
     __tablename__ = "purchase_orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False, index=True)
     order_number = Column(String(50), unique=True, nullable=False)
     status = Column(String(20), default="draft")  # draft, sent, received, cancelled
     total_amount = Column(Numeric(10, 2))
     notes = Column(Text)
     ordered_at = Column(DateTime(timezone=True))
     received_at = Column(DateTime(timezone=True))
-    created_by_id = Column(Integer, ForeignKey("users.id"))
+    created_by_id = Column(Integer, ForeignKey("users.id"), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     items = relationship("PurchaseOrderItem", back_populates="order")
@@ -108,8 +109,8 @@ class PurchaseOrderItem(Base):
     __tablename__ = "purchase_order_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    order_id = Column(Integer, ForeignKey("purchase_orders.id"), nullable=False)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    order_id = Column(Integer, ForeignKey("purchase_orders.id"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     quantity = Column(Numeric(10, 2), nullable=False)
     unit_price = Column(Numeric(10, 2))
 

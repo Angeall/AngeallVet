@@ -35,6 +35,7 @@ api.interceptors.response.use(
 // Auth (backend profile endpoints - Supabase handles actual auth)
 export const authAPI = {
   me: () => api.get('/auth/me'),
+  updateMe: (data) => api.put('/auth/me', data),
   listUsers: () => api.get('/auth/users'),
   listStaff: () => api.get('/auth/staff'),
   updateUser: (id, data) => api.put(`/auth/users/${id}`, data),
@@ -69,7 +70,13 @@ export const animalsAPI = {
   addAlert: (id, data) => api.post(`/animals/${id}/alerts`, data),
   removeAlert: (id, alertId) => api.delete(`/animals/${id}/alerts/${alertId}`),
   getWeights: (id) => api.get(`/animals/${id}/weights`),
+  getLatestWeight: (id) => api.get(`/animals/${id}/weights/latest`),
   addWeight: (id, data) => api.post(`/animals/${id}/weights`, data),
+  // Species
+  listSpecies: () => api.get('/animals/species'),
+  createSpecies: (data) => api.post('/animals/species', data),
+  updateSpecies: (id, data) => api.put(`/animals/species/${id}`, data),
+  deleteSpecies: (id) => api.delete(`/animals/species/${id}`),
 };
 
 // Appointments
@@ -80,7 +87,7 @@ export const appointmentsAPI = {
   update: (id, data) => api.put(`/appointments/${id}`, data),
   updateStatus: (id, data) => api.patch(`/appointments/${id}/status`, data),
   cancel: (id) => api.delete(`/appointments/${id}`),
-  waitingRoom: () => api.get('/appointments/waiting-room'),
+  waitingRoom: (params) => api.get('/appointments/waiting-room', { params }),
 };
 
 // Medical Records
@@ -94,6 +101,10 @@ export const medicalAPI = {
     }),
   listTemplates: (params) => api.get('/medical/templates', { params }),
   createTemplate: (data) => api.post('/medical/templates', data),
+  getTemplate: (id) => api.get(`/medical/templates/${id}`),
+  updateTemplate: (id, data) => api.put(`/medical/templates/${id}`, data),
+  deleteTemplate: (id) => api.delete(`/medical/templates/${id}`),
+  createInvoiceFromRecord: (recordId) => api.post(`/medical/records/${recordId}/create-invoice`),
 };
 
 // Inventory
@@ -125,6 +136,7 @@ export const billingAPI = {
   convertEstimateToInvoice: (data) => api.post('/billing/estimates/to-invoice', data),
   getStats: (params) => api.get('/billing/stats', { params }),
   listDebts: () => api.get('/billing/debts'),
+  getDebtAcknowledgment: (id) => api.get(`/billing/invoices/${id}/debt-acknowledgment`),
 };
 
 // Communications
@@ -135,6 +147,17 @@ export const communicationsAPI = {
   createRule: (data) => api.post('/communications/reminders', data),
   updateRule: (id, data) => api.put(`/communications/reminders/${id}`, data),
   deleteRule: (id) => api.delete(`/communications/reminders/${id}`),
+  postalDueReminders: () => api.get('/communications/reminders/postal-due'),
+};
+
+// Settings
+export const settingsAPI = {
+  getClinic: () => api.get('/settings/clinic'),
+  updateClinic: (data) => api.put('/settings/clinic', data),
+  getVatRates: () => api.get('/settings/vat-rates'),
+  createVatRate: (data) => api.post('/settings/vat-rates', data),
+  updateVatRate: (id, data) => api.put(`/settings/vat-rates/${id}`, data),
+  deleteVatRate: (id) => api.delete(`/settings/vat-rates/${id}`),
 };
 
 // Hospitalization
@@ -146,6 +169,21 @@ export const hospitalizationAPI = {
   addTask: (hospId, data) => api.post(`/hospitalization/${hospId}/tasks`, data),
   updateTask: (hospId, taskId, data) =>
     api.patch(`/hospitalization/${hospId}/tasks/${taskId}`, data),
+};
+
+// Associations
+export const associationsAPI = {
+  list: () => api.get('/associations'),
+  get: (id) => api.get(`/associations/${id}`),
+  create: (data) => api.post('/associations', data),
+  update: (id, data) => api.put(`/associations/${id}`, data),
+};
+
+// Controlled Substances
+export const controlledSubstancesAPI = {
+  listRegister: (params) => api.get('/controlled-substances/register', { params }),
+  createEntry: (data) => api.post('/controlled-substances/entries', data),
+  exportRegister: (params) => api.get('/controlled-substances/register/export', { params, responseType: 'blob' }),
 };
 
 export default api;

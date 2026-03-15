@@ -14,6 +14,7 @@ from app.models.billing import (
 )
 from app.models.client import Client
 from app.models.inventory import Product, StockMovement
+from app.models.settings import ClinicSettings
 from app.schemas.billing import (
     InvoiceCreate, InvoiceUpdate, InvoiceResponse,
     EstimateCreate, EstimateResponse,
@@ -279,6 +280,76 @@ def convert_estimate_to_invoice(
     db.commit()
     db.refresh(invoice)
     return invoice
+
+
+# ─── Debt Acknowledgment ─────────────────────────────────────────────
+
+@router.get("/invoices/{invoice_id}/debt-acknowledgment")
+def get_debt_acknowledgment(
+    invoice_id: int,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return data needed to generate a debt acknowledgment document."""
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture non trouvée")
+
+    remaining = float(invoice.total or 0) - float(invoice.amount_paid or 0)
+    if remaining <= 0:
+        raise HTTPException(status_code=400, detail="Cette facture est déjà payée")
+
+    client = db.query(Client).filter(Client.id == invoice.client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client non trouvé")
+
+    clinic = db.query(ClinicSettings).first()
+
+    return {
+        "clinic": {
+            "clinic_name": clinic.clinic_name if clinic else None,
+            "address": clinic.address if clinic else None,
+            "city": clinic.city if clinic else None,
+            "postal_code": clinic.postal_code if clinic else None,
+            "phone": clinic.phone if clinic else None,
+            "email": clinic.email if clinic else None,
+            "siret": clinic.siret if clinic else None,
+            "vat_number": clinic.vat_number if clinic else None,
+        },
+        "client": {
+            "id": client.id,
+            "first_name": client.first_name,
+            "last_name": client.last_name,
+            "address": client.address,
+            "city": client.city,
+            "postal_code": client.postal_code,
+            "email": client.email,
+            "phone": client.phone,
+            "vat_number": client.vat_number,
+        },
+        "invoice": {
+            "id": invoice.id,
+            "invoice_number": invoice.invoice_number,
+            "issue_date": invoice.issue_date.isoformat() if invoice.issue_date else None,
+            "subtotal": round(float(invoice.subtotal or 0), 2),
+            "total_vat": round(float(invoice.total_vat or 0), 2),
+            "total": round(float(invoice.total or 0), 2),
+            "amount_paid": round(float(invoice.amount_paid or 0), 2),
+            "remaining": round(remaining, 2),
+        },
+        "lines": [
+            {
+                "description": line.description,
+                "quantity": round(float(line.quantity or 1), 2),
+                "unit_price": round(float(line.unit_price or 0), 2),
+                "vat_rate": round(float(line.vat_rate or 0), 2),
+                "discount_percent": round(float(line.discount_percent or 0), 2),
+                "line_total": round(float(line.line_total or 0), 2),
+            }
+            for line in invoice.lines
+        ],
+        "template": clinic.debt_acknowledgment_template if clinic else None,
+    }
 
 
 # ─── Debts (clients with outstanding balances) ──────────────────────

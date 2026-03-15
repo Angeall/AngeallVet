@@ -1,7 +1,14 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
+
+
+def _empty_to_none(v):
+    """Convert empty strings to None so Optional fields pass validation."""
+    if isinstance(v, str) and v.strip() == "":
+        return None
+    return v
 
 
 class ClientBase(BaseModel):
@@ -17,6 +24,12 @@ class ClientBase(BaseModel):
     latitude: Optional[Decimal] = None
     longitude: Optional[Decimal] = None
     notes: Optional[str] = None
+    vat_number: Optional[str] = None
+
+    @field_validator("email", "phone", "mobile", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v):
+        return _empty_to_none(v)
 
 
 class ClientCreate(ClientBase):
@@ -36,6 +49,12 @@ class ClientUpdate(BaseModel):
     latitude: Optional[Decimal] = None
     longitude: Optional[Decimal] = None
     notes: Optional[str] = None
+    vat_number: Optional[str] = None
+
+    @field_validator("email", "phone", "mobile", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v):
+        return _empty_to_none(v)
 
 
 class ClientResponse(ClientBase):
@@ -44,6 +63,7 @@ class ClientResponse(ClientBase):
     is_active: bool
     created_at: datetime
     animal_count: Optional[int] = None
+    vat_number: Optional[str] = None
 
     class Config:
         from_attributes = True

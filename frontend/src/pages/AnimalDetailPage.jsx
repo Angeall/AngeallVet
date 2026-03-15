@@ -11,7 +11,7 @@ export default function AnimalDetailPage() {
   const [records, setRecords] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [hospitalizations, setHospitalizations] = useState([]);
-  const [tab, setTab] = useState('info');
+  const [tab, setTab] = useState('medical');
   const [newWeight, setNewWeight] = useState('');
   const [showRecordForm, setShowRecordForm] = useState(false);
   const [showHospForm, setShowHospForm] = useState(false);
@@ -27,6 +27,17 @@ export default function AnimalDetailPage() {
   const [products, setProducts] = useState([]);
   const [shortcuts, setShortcuts] = useState([]);
   const [invoiceLines, setInvoiceLines] = useState([{ description: '', quantity: '1', unit_price: '', vat_rate: '20.00', product_id: null }]);
+  const [speciesList, setSpeciesList] = useState([]);
+
+  // On-site treatment products
+  const [onsiteProducts, setOnsiteProducts] = useState([]);
+  const [onsiteProductSearch, setOnsiteProductSearch] = useState('');
+  const [onsiteProductResults, setOnsiteProductResults] = useState([]);
+
+  // Home treatment products
+  const [htProducts, setHtProducts] = useState([]);
+  const [htProductSearch, setHtProductSearch] = useState('');
+  const [htProductResults, setHtProductResults] = useState([]);
 
   const load = async () => {
     try {
@@ -54,6 +65,10 @@ export default function AnimalDetailPage() {
 
   useEffect(() => { load(); }, [id]);
 
+  useEffect(() => {
+    animalsAPI.listSpecies().then(res => setSpeciesList(res.data || [])).catch(() => {});
+  }, []);
+
   const loadProducts = async () => {
     try {
       const [pRes, sRes] = await Promise.all([
@@ -63,6 +78,48 @@ export default function AnimalDetailPage() {
       setProducts(pRes.data || []);
       setShortcuts(sRes.data || []);
     } catch {}
+  };
+
+  // Debounced search for on-site treatment products
+  useEffect(() => {
+    if (onsiteProductSearch.length < 2) { setOnsiteProductResults([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await inventoryAPI.listProducts({ search: onsiteProductSearch });
+        setOnsiteProductResults(res.data || []);
+      } catch {}
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [onsiteProductSearch]);
+
+  // Debounced search for home treatment products
+  useEffect(() => {
+    if (htProductSearch.length < 2) { setHtProductResults([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await inventoryAPI.listProducts({ search: htProductSearch });
+        setHtProductResults(res.data || []);
+      } catch {}
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [htProductSearch]);
+
+  const addOnsiteProduct = (product) => {
+    setOnsiteProducts(prev => [...prev, { product_id: product.id, name: product.name, quantity: 1, selling_price: product.selling_price }]);
+    setOnsiteProductSearch(''); setOnsiteProductResults([]);
+  };
+  const removeOnsiteProduct = (idx) => setOnsiteProducts(prev => prev.filter((_, i) => i !== idx));
+  const updateOnsiteProductQty = (idx, qty) => {
+    setOnsiteProducts(prev => { const u = [...prev]; u[idx] = { ...u[idx], quantity: parseFloat(qty) || 1 }; return u; });
+  };
+
+  const addHtProduct = (product) => {
+    setHtProducts(prev => [...prev, { product_id: product.id, name: product.name, quantity: 1, selling_price: product.selling_price }]);
+    setHtProductSearch(''); setHtProductResults([]);
+  };
+  const removeHtProduct = (idx) => setHtProducts(prev => prev.filter((_, i) => i !== idx));
+  const updateHtProductQty = (idx, qty) => {
+    setHtProducts(prev => { const u = [...prev]; u[idx] = { ...u[idx], quantity: parseFloat(qty) || 1 }; return u; });
   };
 
   const addWeight = async (e) => {
@@ -77,17 +134,37 @@ export default function AnimalDetailPage() {
 
   const applyTemplate = (templateId) => {
     const t = templates.find((tp) => tp.id === parseInt(templateId));
-    if (t) setRecordForm({ ...recordForm, subjective: t.subjective || '', objective: t.objective || '', assessment: t.assessment || '', plan: t.plan || '' });
+    if (t) {
+      setRecordForm({ ...recordForm, subjective: t.subjective || '', objective: t.objective || '', assessment: t.assessment || '', plan: t.plan || '' });
+      if (t.products) {
+        setOnsiteProducts(t.products.filter(p => p.treatment_location === 'onsite').map(p => ({ product_id: p.product_id, quantity: parseFloat(p.quantity), product_name: '' })));
+        setHtProducts(t.products.filter(p => p.treatment_location === 'home').map(p => ({ product_id: p.product_id, quantity: parseFloat(p.quantity), product_name: '' })));
+      }
+    }
   };
 
   const handleRecordSubmit = async (e) => {
     e.preventDefault();
     try {
-      await medicalAPI.createRecord({ ...recordForm, animal_id: parseInt(id) });
+      await medicalAPI.createRecord({
+        ...recordForm, animal_id: parseInt(id),
+        onsite_treatment_products: onsiteProducts.map(p => ({ product_id: p.product_id, quantity: p.quantity })),
+        home_treatment_products: htProducts.map(p => ({ product_id: p.product_id, quantity: p.quantity })),
+      });
       toast.success('Dossier medical cree'); setShowRecordForm(false);
       setRecordForm({ record_type: 'consultation', subjective: '', objective: '', assessment: '', plan: '', home_treatment: '', notes: '' });
+      setOnsiteProducts([]); setHtProducts([]);
       const rRes = await medicalAPI.listRecords({ animal_id: id }); setRecords(rRes.data);
     } catch { toast.error('Erreur lors de la creation'); }
+  };
+
+  const handleCreateInvoiceFromRecord = async (recordId) => {
+    try {
+      await medicalAPI.createInvoiceFromRecord(recordId);
+      toast.success('Facture brouillon creee');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur lors de la creation de la facture');
+    }
   };
 
   const sendHomeTreatment = async (record) => {
@@ -159,6 +236,46 @@ export default function AnimalDetailPage() {
   const vitalStatusColors = { alive: 'green', lost: 'purple', deceased: 'red' };
   const weightChartData = [...weights].reverse().map(w => ({ date: new Date(w.recorded_at).toLocaleDateString('fr-FR'), poids: parseFloat(w.weight_kg) }));
   const recordTypeLabel = { consultation: 'Consultation', vaccination: 'Vaccination', surgery: 'Chirurgie', lab_result: 'Labo', imaging: 'Imagerie', note: 'Note' };
+
+  const ProductSearchSection = ({ label, products: productList, setProducts: setProductList, search, setSearch, results, setResults, add, remove, updateQty, placeholder }) => (
+    <div style={{ borderTop: '1px solid var(--gray-200)', margin: '16px 0', paddingTop: '16px' }}>
+      <h4 style={{ marginBottom: '8px' }}>{label}</h4>
+      <div className="form-group" style={{ position: 'relative' }}>
+        <label className="form-label">Ajouter un produit / acte</label>
+        <input
+          className="form-input"
+          placeholder={placeholder || "Rechercher un medicament / acte..."}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onBlur={() => setTimeout(() => setResults([]), 200)}
+        />
+        {results.length > 0 && (
+          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: 'white', border: '1px solid var(--gray-200)', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+            {results.map(p => (
+              <div key={p.id} onMouseDown={() => add(p)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--gray-100)' }}
+                onMouseEnter={(e) => e.target.style.background = 'var(--gray-50)'}
+                onMouseLeave={(e) => e.target.style.background = 'white'}>
+                <strong>{p.name}</strong>
+                <span style={{ color: 'var(--gray-400)', marginLeft: '8px', fontSize: '0.85rem' }}>{parseFloat(p.selling_price || 0).toFixed(2)} EUR</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {productList.length > 0 && (
+        <div style={{ marginTop: '8px' }}>
+          {productList.map((p, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px', padding: '6px 8px', background: 'var(--gray-50)', borderRadius: '6px' }}>
+              <span style={{ flex: 1 }}>{p.name}</span>
+              <span style={{ fontSize: '0.85rem', color: 'var(--gray-500)' }}>{parseFloat(p.selling_price || 0).toFixed(2)} EUR</span>
+              <input type="number" min="1" step="1" style={{ width: '60px' }} className="form-input" value={p.quantity} onChange={(e) => updateQty(idx, e.target.value)} />
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => remove(idx)} style={{ color: 'var(--danger)' }}>X</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div>
@@ -266,60 +383,61 @@ export default function AnimalDetailPage() {
         ) : <p style={{ color: 'var(--gray-400)', textAlign: 'center', margin: '8px 0' }}>Aucune alerte active</p>}
       </div>
 
-      {/* Info card with edit */}
-      <div className="card">
-        <div className="card-header"><h3 className="card-title">Informations</h3><button className="btn btn-secondary btn-sm" onClick={() => setShowEditForm(!showEditForm)}>{showEditForm ? 'Annuler' : 'Modifier'}</button></div>
-        {showEditForm ? (
-          <form onSubmit={handleEditSubmit}>
-            <div className="form-row">
-              <div className="form-group"><label className="form-label">Nom *</label><input className="form-input" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required /></div>
-              <div className="form-group"><label className="form-label">Espece</label><select className="form-select" value={editForm.species} onChange={(e) => setEditForm({ ...editForm, species: e.target.value })}><option value="dog">Chien</option><option value="cat">Chat</option><option value="bird">Oiseau</option><option value="rabbit">Lapin</option><option value="reptile">Reptile</option><option value="horse">Cheval</option><option value="nac">NAC</option></select></div>
-              <div className="form-group"><label className="form-label">Race</label><input className="form-input" value={editForm.breed} onChange={(e) => setEditForm({ ...editForm, breed: e.target.value })} /></div>
-            </div>
-            <div className="form-row">
-              <div className="form-group"><label className="form-label">Sexe</label><select className="form-select" value={editForm.sex} onChange={(e) => setEditForm({ ...editForm, sex: e.target.value })}><option value="male">Male</option><option value="female">Femelle</option></select></div>
-              <div className="form-group"><label className="form-label">Date de naissance</label><input type="date" className="form-input" value={editForm.date_of_birth} onChange={(e) => setEditForm({ ...editForm, date_of_birth: e.target.value })} /></div>
-              <div className="form-group"><label className="form-label">Couleur</label><input className="form-input" value={editForm.color} onChange={(e) => setEditForm({ ...editForm, color: e.target.value })} /></div>
-            </div>
-            <div className="form-row">
-              <div className="form-group"><label className="form-label">N Puce</label><input className="form-input" value={editForm.microchip_number} onChange={(e) => setEditForm({ ...editForm, microchip_number: e.target.value })} /></div>
-              <div className="form-group"><label className="form-label">N Tatouage</label><input className="form-input" value={editForm.tattoo_number} onChange={(e) => setEditForm({ ...editForm, tattoo_number: e.target.value })} /></div>
-              <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}><label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><input type="checkbox" checked={editForm.is_neutered} onChange={(e) => setEditForm({ ...editForm, is_neutered: e.target.checked })} />Sterilise</label></div>
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Statut vital</label>
-                <select className="form-select" value={editForm.vital_status} onChange={(e) => setEditForm({ ...editForm, vital_status: e.target.value, vital_status_date: e.target.value !== 'alive' ? (editForm.vital_status_date || new Date().toISOString().slice(0, 10)) : '' })}>
-                  <option value="alive">Vivant</option>
-                  <option value="lost">Perdu</option>
-                  <option value="deceased">Decede</option>
-                </select>
-              </div>
-              {editForm.vital_status !== 'alive' && (
-                <div className="form-group">
-                  <label className="form-label">Date du changement</label>
-                  <input type="date" className="form-input" value={editForm.vital_status_date} onChange={(e) => setEditForm({ ...editForm, vital_status_date: e.target.value })} />
-                </div>
-              )}
-            </div>
-            <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Notes sur l'animal..." /></div>
-            <button type="submit" className="btn btn-primary">Enregistrer</button>
-          </form>
-        ) : (
-          <>
-            <div className="form-row">
-              <div><strong>Espece:</strong> {animal.species}</div><div><strong>Race:</strong> {animal.breed || '-'}</div><div><strong>Sexe:</strong> {animal.sex}</div><div><strong>Ne(e) le:</strong> {animal.date_of_birth || '-'}</div>
-              <div><strong>Couleur:</strong> {animal.color || '-'}</div><div><strong>Sterilise:</strong> {animal.is_neutered ? 'Oui' : 'Non'}</div><div><strong>Puce:</strong> {animal.microchip_number || '-'}</div><div><strong>Tatouage:</strong> {animal.tattoo_number || '-'}</div>
-              <div><strong>Statut:</strong> <span className={`badge badge-${vitalStatusColors[animal.vital_status] || 'green'}`}>{vitalStatusLabels[animal.vital_status] || 'Vivant'}</span>{animal.vital_status_date && ` (${new Date(animal.vital_status_date + 'T00:00').toLocaleDateString('fr-FR')})`}</div>
-            </div>
-            {animal.notes && <div style={{ marginTop: '12px' }}><strong>Notes:</strong> <span style={{ whiteSpace: 'pre-wrap' }}>{animal.notes}</span></div>}
-          </>
-        )}
+      <div className="tabs">
+        {['medical', 'info', 'weight'].map(t => (<button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>{t === 'info' ? 'Informations' : t === 'weight' ? 'Courbe de poids' : 'Dossier medical'}</button>))}
       </div>
 
-      <div className="tabs">
-        {['info', 'weight', 'medical'].map(t => (<button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>{t === 'info' ? 'Informations' : t === 'weight' ? 'Courbe de poids' : 'Dossier medical'}</button>))}
-      </div>
+      {tab === 'info' && (
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Informations</h3><button className="btn btn-secondary btn-sm" onClick={() => setShowEditForm(!showEditForm)}>{showEditForm ? 'Annuler' : 'Modifier'}</button></div>
+          {showEditForm ? (
+            <form onSubmit={handleEditSubmit}>
+              <div className="form-row">
+                <div className="form-group"><label className="form-label">Nom *</label><input className="form-input" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required /></div>
+                <div className="form-group"><label className="form-label">Espece</label><select className="form-select" value={editForm.species} onChange={(e) => setEditForm({ ...editForm, species: e.target.value })}>{speciesList.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}</select></div>
+                <div className="form-group"><label className="form-label">Race</label><input className="form-input" value={editForm.breed} onChange={(e) => setEditForm({ ...editForm, breed: e.target.value })} /></div>
+              </div>
+              <div className="form-row">
+                <div className="form-group"><label className="form-label">Sexe</label><select className="form-select" value={editForm.sex} onChange={(e) => setEditForm({ ...editForm, sex: e.target.value })}><option value="male">Male</option><option value="female">Femelle</option></select></div>
+                <div className="form-group"><label className="form-label">Date de naissance</label><input type="date" className="form-input" value={editForm.date_of_birth} onChange={(e) => setEditForm({ ...editForm, date_of_birth: e.target.value })} /></div>
+                <div className="form-group"><label className="form-label">Couleur</label><input className="form-input" value={editForm.color} onChange={(e) => setEditForm({ ...editForm, color: e.target.value })} /></div>
+              </div>
+              <div className="form-row">
+                <div className="form-group"><label className="form-label">N Puce</label><input className="form-input" value={editForm.microchip_number} onChange={(e) => setEditForm({ ...editForm, microchip_number: e.target.value })} /></div>
+                <div className="form-group"><label className="form-label">N Tatouage</label><input className="form-input" value={editForm.tattoo_number} onChange={(e) => setEditForm({ ...editForm, tattoo_number: e.target.value })} /></div>
+                <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}><label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><input type="checkbox" checked={editForm.is_neutered} onChange={(e) => setEditForm({ ...editForm, is_neutered: e.target.checked })} />Sterilise</label></div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Statut vital</label>
+                  <select className="form-select" value={editForm.vital_status} onChange={(e) => setEditForm({ ...editForm, vital_status: e.target.value, vital_status_date: e.target.value !== 'alive' ? (editForm.vital_status_date || new Date().toISOString().slice(0, 10)) : '' })}>
+                    <option value="alive">Vivant</option>
+                    <option value="lost">Perdu</option>
+                    <option value="deceased">Decede</option>
+                  </select>
+                </div>
+                {editForm.vital_status !== 'alive' && (
+                  <div className="form-group">
+                    <label className="form-label">Date du changement</label>
+                    <input type="date" className="form-input" value={editForm.vital_status_date} onChange={(e) => setEditForm({ ...editForm, vital_status_date: e.target.value })} />
+                  </div>
+                )}
+              </div>
+              <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Notes sur l'animal..." /></div>
+              <button type="submit" className="btn btn-primary">Enregistrer</button>
+            </form>
+          ) : (
+            <>
+              <div className="form-row">
+                <div><strong>Espece:</strong> {animal.species}</div><div><strong>Race:</strong> {animal.breed || '-'}</div><div><strong>Sexe:</strong> {animal.sex}</div><div><strong>Ne(e) le:</strong> {animal.date_of_birth || '-'}</div>
+                <div><strong>Couleur:</strong> {animal.color || '-'}</div><div><strong>Sterilise:</strong> {animal.is_neutered ? 'Oui' : 'Non'}</div><div><strong>Puce:</strong> {animal.microchip_number || '-'}</div><div><strong>Tatouage:</strong> {animal.tattoo_number || '-'}</div>
+                <div><strong>Statut:</strong> <span className={`badge badge-${vitalStatusColors[animal.vital_status] || 'green'}`}>{vitalStatusLabels[animal.vital_status] || 'Vivant'}</span>{animal.vital_status_date && ` (${new Date(animal.vital_status_date + 'T00:00').toLocaleDateString('fr-FR')})`}</div>
+              </div>
+              {animal.notes && <div style={{ marginTop: '12px' }}><strong>Notes:</strong> <span style={{ whiteSpace: 'pre-wrap' }}>{animal.notes}</span></div>}
+            </>
+          )}
+        </div>
+      )}
 
       {tab === 'weight' && (
         <div className="card">
@@ -342,34 +460,77 @@ export default function AnimalDetailPage() {
                 <div className="form-group"><label className="form-label">S - Subjectif (Motif / Anamnese)</label><textarea className="form-textarea" value={recordForm.subjective} onChange={(e) => setRecordForm({ ...recordForm, subjective: e.target.value })} /></div>
                 <div className="form-group"><label className="form-label">O - Objectif (Examen clinique)</label><textarea className="form-textarea" value={recordForm.objective} onChange={(e) => setRecordForm({ ...recordForm, objective: e.target.value })} /></div>
                 <div className="form-group"><label className="form-label">A - Assessment (Diagnostic)</label><textarea className="form-textarea" value={recordForm.assessment} onChange={(e) => setRecordForm({ ...recordForm, assessment: e.target.value })} /></div>
-                <div className="form-group"><label className="form-label">P - Plan (Traitement)</label><textarea className="form-textarea" value={recordForm.plan} onChange={(e) => setRecordForm({ ...recordForm, plan: e.target.value })} /></div>
-                <div className="form-group"><label className="form-label">Traitement a la maison</label><textarea className="form-textarea" value={recordForm.home_treatment} onChange={(e) => setRecordForm({ ...recordForm, home_treatment: e.target.value })} placeholder="Instructions pour le proprietaire: medicaments, posologie, soins..." /></div>
-                <div style={{ display: 'flex', gap: '8px' }}><button type="submit" className="btn btn-primary">Enregistrer</button><button type="button" className="btn btn-secondary" onClick={() => setShowRecordForm(false)}>Annuler</button></div>
+
+                {/* P - Sur place */}
+                <ProductSearchSection
+                  label="P - Produits / Actes sur place"
+                  products={onsiteProducts} setProducts={setOnsiteProducts}
+                  search={onsiteProductSearch} setSearch={setOnsiteProductSearch}
+                  results={onsiteProductResults} setResults={setOnsiteProductResults}
+                  add={addOnsiteProduct} remove={removeOnsiteProduct} updateQty={updateOnsiteProductQty}
+                  placeholder="Rechercher un acte / medicament utilise sur place..."
+                />
+                <div className="form-group"><label className="form-label">Notes supplementaires sur place</label><textarea className="form-textarea" value={recordForm.plan} onChange={(e) => setRecordForm({ ...recordForm, plan: e.target.value })} placeholder="Actes realises en clinique..." /></div>
+
+                {/* A domicile */}
+                <ProductSearchSection
+                  label="Produits / Medicaments a domicile"
+                  products={htProducts} setProducts={setHtProducts}
+                  search={htProductSearch} setSearch={setHtProductSearch}
+                  results={htProductResults} setResults={setHtProductResults}
+                  add={addHtProduct} remove={removeHtProduct} updateQty={updateHtProductQty}
+                  placeholder="Rechercher un medicament a emporter..."
+                />
+                <div className="form-group"><label className="form-label">Notes supplementaires domicile</label><textarea className="form-textarea" value={recordForm.home_treatment} onChange={(e) => setRecordForm({ ...recordForm, home_treatment: e.target.value })} placeholder="Instructions pour le proprietaire: medicaments, posologie, soins..." /></div>
+
+                <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}><button type="submit" className="btn btn-primary">Enregistrer</button><button type="button" className="btn btn-secondary" onClick={() => setShowRecordForm(false)}>Annuler</button></div>
               </form>
             </div>
           )}
           <div className="timeline">
-            {records.map(r => (
-              <div key={r.id} className="timeline-item">
-                <div className={`timeline-dot ${r.record_type}`} />
-                <div className="card" style={{ marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span className={`badge badge-${r.record_type === 'vaccination' ? 'green' : r.record_type === 'surgery' ? 'red' : 'blue'}`}>{recordTypeLabel[r.record_type] || r.record_type}</span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>{new Date(r.created_at).toLocaleDateString('fr-FR')}</span>
-                  </div>
-                  {r.subjective && <p><strong>Motif:</strong> {r.subjective}</p>}
-                  {r.assessment && <p><strong>Diagnostic:</strong> {r.assessment}</p>}
-                  {r.plan && <p><strong>Plan:</strong> {r.plan}</p>}
-                  {r.home_treatment && (
-                    <div style={{ background: 'var(--gray-50)', padding: '8px', borderRadius: '6px', marginTop: '8px' }}>
-                      <strong>Traitement a la maison:</strong>
-                      <p style={{ whiteSpace: 'pre-wrap', margin: '4px 0' }}>{r.home_treatment}</p>
-                      <button className="btn btn-primary btn-sm" onClick={() => sendHomeTreatment(r)} style={{ marginTop: '4px' }}>Envoyer par email</button>
+            {records.map(r => {
+              const onsiteProds = (r.home_treatment_products || []).filter(p => p.treatment_location === 'onsite');
+              const homeProds = (r.home_treatment_products || []).filter(p => p.treatment_location !== 'onsite');
+              const allProds = r.home_treatment_products || [];
+              return (
+                <div key={r.id} className="timeline-item">
+                  <div className={`timeline-dot ${r.record_type}`} />
+                  <div className="card" style={{ marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span className={`badge badge-${r.record_type === 'vaccination' ? 'green' : r.record_type === 'surgery' ? 'red' : 'blue'}`}>{recordTypeLabel[r.record_type] || r.record_type}</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>{new Date(r.created_at).toLocaleDateString('fr-FR')}</span>
                     </div>
-                  )}
+                    {r.subjective && <p><strong>Motif:</strong> {r.subjective}</p>}
+                    {r.assessment && <p><strong>Diagnostic:</strong> {r.assessment}</p>}
+                    {r.plan && <p><strong>Traitement sur place:</strong> {r.plan}</p>}
+                    {onsiteProds.length > 0 && (
+                      <div style={{ background: 'var(--blue-50, var(--gray-50))', padding: '8px', borderRadius: '6px', marginTop: '4px' }}>
+                        <strong style={{ fontSize: '0.85rem' }}>Actes sur place:</strong>
+                        {onsiteProds.map((p, i) => <span key={i} className="badge badge-blue" style={{ marginLeft: '6px' }}>#{p.product_id} x{parseFloat(p.quantity)}</span>)}
+                      </div>
+                    )}
+                    {r.home_treatment && (
+                      <div style={{ background: 'var(--gray-50)', padding: '8px', borderRadius: '6px', marginTop: '8px' }}>
+                        <strong>Traitement a domicile:</strong>
+                        <p style={{ whiteSpace: 'pre-wrap', margin: '4px 0' }}>{r.home_treatment}</p>
+                        <button className="btn btn-primary btn-sm" onClick={() => sendHomeTreatment(r)} style={{ marginTop: '4px' }}>Envoyer par email</button>
+                      </div>
+                    )}
+                    {homeProds.length > 0 && (
+                      <div style={{ background: 'var(--gray-50)', padding: '8px', borderRadius: '6px', marginTop: '4px' }}>
+                        <strong style={{ fontSize: '0.85rem' }}>Medicaments a domicile:</strong>
+                        {homeProds.map((p, i) => <span key={i} className="badge badge-amber" style={{ marginLeft: '6px' }}>#{p.product_id} x{parseFloat(p.quantity)}</span>)}
+                      </div>
+                    )}
+                    {allProds.length > 0 && (
+                      <button className="btn btn-secondary btn-sm" onClick={() => handleCreateInvoiceFromRecord(r.id)} style={{ marginTop: '8px' }}>
+                        Creer facture ({allProds.length} produit{allProds.length > 1 ? 's' : ''})
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {records.length === 0 && <p style={{ color: 'var(--gray-400)', textAlign: 'center' }}>Aucun dossier medical</p>}
           </div>
         </div>

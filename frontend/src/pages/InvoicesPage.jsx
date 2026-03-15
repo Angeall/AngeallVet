@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { billingAPI } from '../services/api';
+import { billingAPI, clientsAPI, animalsAPI, inventoryAPI, settingsAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 const statusLabels = {
@@ -15,9 +15,20 @@ const statusColors = {
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [defaultVatRate, setDefaultVatRate] = useState('20.00');
   const [form, setForm] = useState({
-    client_id: '', animal_id: '', lines: [{ description: '', quantity: '1', unit_price: '', vat_rate: '20.00' }],
+    client_id: '', animal_id: '', lines: [{ description: '', quantity: '1', unit_price: '', vat_rate: '20.00', product_id: null }],
   });
+
+  // Client search
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientResults, setClientResults] = useState([]);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [animalOptions, setAnimalOptions] = useState([]);
+
+  // Product search per line
+  const [productSearches, setProductSearches] = useState({});
+  const [productResults, setProductResults] = useState({});
 
   useEffect(() => {
     async function load() {
@@ -28,17 +39,83 @@ export default function InvoicesPage() {
         toast.error('Erreur de chargement');
       }
     }
+    async function loadDefaultVat() {
+      try {
+        const res = await settingsAPI.getVatRates();
+        const def = (res.data || []).find(r => r.is_default);
+        if (def) setDefaultVatRate(parseFloat(def.rate).toFixed(2));
+      } catch {}
+    }
     load();
+    loadDefaultVat();
   }, []);
 
+  // Client search debounce
+  useEffect(() => {
+    if (clientSearch.length < 2) { setClientResults([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await clientsAPI.list({ search: clientSearch });
+        setClientResults(res.data || []);
+      } catch {}
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [clientSearch]);
+
+  const selectClient = async (client) => {
+    setSelectedClient(client);
+    setForm(prev => ({ ...prev, client_id: client.id }));
+    setClientSearch(`${client.last_name} ${client.first_name}`);
+    setClientResults([]);
+    try {
+      const res = await animalsAPI.list({ client_id: client.id });
+      setAnimalOptions(res.data || []);
+    } catch {}
+  };
+
+  // Product search debounce per line index
+  useEffect(() => {
+    const timers = {};
+    Object.entries(productSearches).forEach(([idx, query]) => {
+      if (!query || query.length < 2) {
+        setProductResults(prev => ({ ...prev, [idx]: [] }));
+        return;
+      }
+      timers[idx] = setTimeout(async () => {
+        try {
+          const res = await inventoryAPI.listProducts({ search: query });
+          setProductResults(prev => ({ ...prev, [idx]: res.data || [] }));
+        } catch {}
+      }, 300);
+    });
+    return () => Object.values(timers).forEach(clearTimeout);
+  }, [productSearches]);
+
+  const selectProduct = (idx, product) => {
+    const lines = [...form.lines];
+    lines[idx] = {
+      ...lines[idx],
+      description: product.name,
+      unit_price: parseFloat(product.selling_price || 0).toFixed(2),
+      vat_rate: product.vat_rate != null ? parseFloat(product.vat_rate).toFixed(2) : defaultVatRate,
+      product_id: product.id,
+    };
+    setForm({ ...form, lines });
+    setProductSearches(prev => ({ ...prev, [idx]: '' }));
+    setProductResults(prev => ({ ...prev, [idx]: [] }));
+  };
+
   const addLine = () => {
-    setForm({ ...form, lines: [...form.lines, { description: '', quantity: '1', unit_price: '', vat_rate: '20.00' }] });
+    setForm({ ...form, lines: [...form.lines, { description: '', quantity: '1', unit_price: '', vat_rate: defaultVatRate, product_id: null }] });
   };
 
   const removeLine = (idx) => {
     if (form.lines.length <= 1) return;
     const lines = form.lines.filter((_, i) => i !== idx);
     setForm({ ...form, lines });
+    // Clean up product search state
+    setProductSearches(prev => { const n = { ...prev }; delete n[idx]; return n; });
+    setProductResults(prev => { const n = { ...prev }; delete n[idx]; return n; });
   };
 
   const updateLine = (idx, field, value) => {
@@ -68,6 +145,10 @@ export default function InvoicesPage() {
       });
       toast.success('Facture creee');
       setShowForm(false);
+      setSelectedClient(null);
+      setClientSearch('');
+      setAnimalOptions([]);
+      setForm({ client_id: '', animal_id: '', lines: [{ description: '', quantity: '1', unit_price: '', vat_rate: defaultVatRate, product_id: null }] });
       const res = await billingAPI.listInvoices({});
       setInvoices(res.data);
     } catch {
@@ -91,21 +172,66 @@ export default function InvoicesPage() {
           <h3 className="card-title" style={{ marginBottom: '16px' }}>Nouvelle facture</h3>
           <form onSubmit={handleSubmit}>
             <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">ID Client *</label>
-                <input className="form-input" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })} required />
+              <div className="form-group" style={{ position: 'relative' }}>
+                <label className="form-label">Client *</label>
+                <input
+                  className="form-input"
+                  placeholder="Rechercher un client..."
+                  value={clientSearch}
+                  onChange={(e) => { setClientSearch(e.target.value); setSelectedClient(null); setForm(prev => ({ ...prev, client_id: '', animal_id: '' })); setAnimalOptions([]); }}
+                  required={!selectedClient}
+                />
+                {clientResults.length > 0 && !selectedClient && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: 'white', border: '1px solid var(--gray-200)', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                    {clientResults.map(c => (
+                      <div key={c.id} onClick={() => selectClient(c)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--gray-100)' }}
+                        onMouseEnter={(e) => e.target.style.background = 'var(--gray-50)'}
+                        onMouseLeave={(e) => e.target.style.background = 'white'}>
+                        <strong>{c.last_name} {c.first_name}</strong>
+                        <span style={{ color: 'var(--gray-400)', marginLeft: '8px', fontSize: '0.85rem' }}>{c.phone || c.email || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="form-group">
-                <label className="form-label">ID Animal</label>
-                <input className="form-input" value={form.animal_id} onChange={(e) => setForm({ ...form, animal_id: e.target.value })} />
+                <label className="form-label">Animal</label>
+                <select className="form-select" value={form.animal_id} onChange={(e) => setForm({ ...form, animal_id: e.target.value })}>
+                  <option value="">-- Choisir --</option>
+                  {animalOptions.map(a => <option key={a.id} value={a.id}>{a.name} ({a.species})</option>)}
+                </select>
               </div>
             </div>
             <h4 style={{ marginBottom: '8px' }}>Lignes de facture</h4>
             {form.lines.map((line, idx) => (
               <div className="line-item-row" key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', marginBottom: '8px' }}>
-                <div className="form-group" style={{ flex: 1 }}>
-                  {idx === 0 && <label className="form-label">Description</label>}
-                  <input className="form-input" placeholder="Description" value={line.description} onChange={(e) => updateLine(idx, 'description', e.target.value)} required />
+                <div className="form-group" style={{ flex: 1, position: 'relative' }}>
+                  {idx === 0 && <label className="form-label">Description / Produit</label>}
+                  <input
+                    className="form-input"
+                    placeholder="Rechercher un produit ou saisir..."
+                    value={productSearches[idx] !== undefined && productSearches[idx] !== '' ? productSearches[idx] : line.description}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setProductSearches(prev => ({ ...prev, [idx]: val }));
+                      updateLine(idx, 'description', val);
+                    }}
+                    onFocus={() => { if (line.description.length >= 2) setProductSearches(prev => ({ ...prev, [idx]: line.description })); }}
+                    onBlur={() => { setTimeout(() => setProductResults(prev => ({ ...prev, [idx]: [] })), 200); }}
+                    required
+                  />
+                  {(productResults[idx] || []).length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: 'white', border: '1px solid var(--gray-200)', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                      {productResults[idx].map(p => (
+                        <div key={p.id} onMouseDown={() => selectProduct(idx, p)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--gray-100)' }}
+                          onMouseEnter={(e) => e.target.style.background = 'var(--gray-50)'}
+                          onMouseLeave={(e) => e.target.style.background = 'white'}>
+                          <strong>{p.name}</strong>
+                          <span style={{ color: 'var(--gray-400)', marginLeft: '8px', fontSize: '0.85rem' }}>{parseFloat(p.selling_price || 0).toFixed(2)} EUR</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="form-group" style={{ maxWidth: '80px' }}>
                   {idx === 0 && <label className="form-label">Qte</label>}
@@ -123,7 +249,7 @@ export default function InvoicesPage() {
                   {idx === 0 && <label className="form-label">Total HT</label>}
                   <input className="form-input" value={lineTotal(line) + ' EUR'} disabled style={{ background: 'var(--gray-100)' }} />
                 </div>
-                <div style={{ marginBottom: idx === 0 ? '0' : '0' }}>
+                <div>
                   {form.lines.length > 1 && (
                     <button type="button" className="btn btn-secondary btn-sm" onClick={() => removeLine(idx)} title="Supprimer">X</button>
                   )}

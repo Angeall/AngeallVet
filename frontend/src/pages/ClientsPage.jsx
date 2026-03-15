@@ -9,7 +9,7 @@ export default function ClientsPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     first_name: '', last_name: '', email: '', phone: '', mobile: '',
-    address: '', city: '', postal_code: '',
+    address: '', city: '', postal_code: '', vat_number: '',
   });
 
   const load = useCallback(async () => {
@@ -26,10 +26,14 @@ export default function ClientsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await clientsAPI.create(form);
+      // Convert empty strings to null so backend validation passes
+      const payload = Object.fromEntries(
+        Object.entries(form).map(([k, v]) => [k, v === '' ? null : v])
+      );
+      await clientsAPI.create(payload);
       toast.success('Client cree');
       setShowForm(false);
-      setForm({ first_name: '', last_name: '', email: '', phone: '', mobile: '', address: '', city: '', postal_code: '' });
+      setForm({ first_name: '', last_name: '', email: '', phone: '', mobile: '', address: '', city: '', postal_code: '', vat_number: '' });
       load();
     } catch {
       toast.error('Erreur lors de la creation');
@@ -94,6 +98,12 @@ export default function ClientsPage() {
               <div className="form-group">
                 <label className="form-label">Code postal</label>
                 <input className="form-input" value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">N TVA (entreprises)</label>
+                <input className="form-input" placeholder="FR12345678901" value={form.vat_number} onChange={(e) => setForm({ ...form, vat_number: e.target.value })} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>

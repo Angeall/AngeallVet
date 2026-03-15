@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { billingAPI, clientsAPI, animalsAPI } from '../services/api';
+import { billingAPI, clientsAPI, animalsAPI, settingsAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 const statusLabels = {
@@ -33,6 +33,10 @@ export default function InvoiceDetailPage() {
     { method: 'cash', amount: '' },
     { method: 'card', amount: '' },
   ]);
+
+  // Debt acknowledgment
+  const [showDebtDoc, setShowDebtDoc] = useState(false);
+  const [debtData, setDebtData] = useState(null);
 
   const load = async () => {
     try {
@@ -138,6 +142,90 @@ export default function InvoiceDetailPage() {
   const cashReceivedVal = parseFloat(cashReceived) || 0;
   const cashChange = cashReceivedVal - cashAmount;
 
+  const openDebtAcknowledgment = async () => {
+    try {
+      const res = await billingAPI.getDebtAcknowledgment(id);
+      setDebtData(res.data);
+      setShowDebtDoc(true);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur');
+    }
+  };
+
+  const printDebtDoc = () => {
+    const printWindow = window.open('', '_blank');
+    const clinic = debtData.clinic;
+    const client = debtData.client;
+    const inv = debtData.invoice;
+    const today = new Date().toLocaleDateString('fr-FR');
+
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Reconnaissance de dette - ${inv.invoice_number}</title>
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; color: #333; line-height: 1.6; }
+        h1 { text-align: center; font-size: 1.4rem; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 1px; }
+        .header { display: flex; justify-content: space-between; margin-bottom: 30px; }
+        .header-block { max-width: 45%; }
+        .header-block h3 { margin: 0 0 8px; font-size: 0.9rem; color: #666; text-transform: uppercase; }
+        .header-block p { margin: 2px 0; font-size: 0.9rem; }
+        .separator { border: none; border-top: 2px solid #333; margin: 24px 0; }
+        .content { margin: 20px 0; font-size: 0.95rem; }
+        .amount { font-size: 1.3rem; font-weight: 700; text-align: center; margin: 20px 0; padding: 16px; border: 2px solid #333; }
+        .legal { font-size: 0.8rem; color: #666; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 16px; }
+        .signature { margin-top: 60px; display: flex; justify-content: space-between; }
+        .signature-block { width: 40%; text-align: center; }
+        .signature-line { border-top: 1px solid #333; margin-top: 60px; padding-top: 8px; font-size: 0.85rem; }
+        @media print { body { margin: 20px; } }
+      </style></head><body>
+      <h1>Reconnaissance de dette</h1>
+      <div class="header">
+        <div class="header-block">
+          <h3>Creancier</h3>
+          <p><strong>${clinic.clinic_name || ''}</strong></p>
+          <p>${clinic.address || ''}</p>
+          <p>${clinic.postal_code || ''} ${clinic.city || ''}</p>
+          ${clinic.siret ? `<p>SIRET : ${clinic.siret}</p>` : ''}
+          ${clinic.vat_number ? `<p>TVA : ${clinic.vat_number}</p>` : ''}
+        </div>
+        <div class="header-block">
+          <h3>Debiteur</h3>
+          <p><strong>${client.last_name} ${client.first_name}</strong></p>
+          <p>${client.address || ''}</p>
+          <p>${client.postal_code || ''} ${client.city || ''}</p>
+          ${client.vat_number ? `<p>TVA : ${client.vat_number}</p>` : ''}
+        </div>
+      </div>
+      <hr class="separator" />
+      <div class="content">
+        <p>Je soussigne(e), <strong>${client.last_name} ${client.first_name}</strong>, reconnais devoir a
+        <strong>${clinic.clinic_name || 'la clinique veterinaire'}</strong> la somme de :</p>
+      </div>
+      <div class="amount">${inv.remaining.toFixed(2)} EUR</div>
+      <div class="content">
+        <p>Au titre de la facture n° <strong>${inv.invoice_number}</strong> emise le ${inv.issue_date || '-'},
+        d'un montant total de ${inv.total.toFixed(2)} EUR TTC, dont ${inv.amount_paid.toFixed(2)} EUR deja regles.</p>
+        <p>Je m'engage a rembourser cette somme dans les meilleurs delais.</p>
+      </div>
+      <div class="content">
+        <p>Fait a ${clinic.city || '________________'}, le ${today}</p>
+      </div>
+      <div class="signature">
+        <div class="signature-block">
+          <div class="signature-line">Signature du debiteur<br/>(precedee de la mention "Lu et approuve")</div>
+        </div>
+        <div class="signature-block">
+          <div class="signature-line">Signature du creancier</div>
+        </div>
+      </div>
+      <div class="legal">
+        <p>Document etabli en deux exemplaires originaux, un pour chaque partie.</p>
+        <p>Conformement aux articles 1326 et suivants du Code civil, la presente reconnaissance de dette constitue un engagement unilateral du debiteur.</p>
+      </div>
+      </body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 300);
+  };
+
   if (!invoice) return <div className="page-content">Chargement...</div>;
 
   return (
@@ -152,9 +240,14 @@ export default function InvoiceDetailPage() {
             {statusLabels[invoice.status]}
           </span>
           {invoice.status !== 'paid' && invoice.status !== 'cancelled' && remaining > 0 && (
-            <button className="btn btn-primary" onClick={openPayModal}>
-              Payer maintenant
-            </button>
+            <>
+              <button className="btn btn-secondary" onClick={openDebtAcknowledgment}>
+                Reconnaissance de dette
+              </button>
+              <button className="btn btn-primary" onClick={openPayModal}>
+                Payer maintenant
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -253,6 +346,37 @@ export default function InvoiceDetailPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ── Debt Acknowledgment Modal ─────────────────────────── */}
+      {showDebtDoc && debtData && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowDebtDoc(false); }}>
+          <div style={{ background: 'white', borderRadius: '12px', width: '500px', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--gray-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Reconnaissance de dette</h2>
+              <button onClick={() => setShowDebtDoc(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.3rem', color: 'var(--gray-400)' }}>&#x2715;</button>
+            </div>
+            <div style={{ padding: '24px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <strong>Cabinet :</strong> {debtData.clinic.clinic_name || '-'}
+              </div>
+              <div style={{ marginBottom: '16px' }}>
+                <strong>Client :</strong> {debtData.client.last_name} {debtData.client.first_name}
+              </div>
+              <div style={{ marginBottom: '16px' }}>
+                <strong>Facture :</strong> {debtData.invoice.invoice_number}
+              </div>
+              <div style={{ background: '#fef2f2', borderRadius: '8px', padding: '16px', textAlign: 'center', marginBottom: '16px' }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--gray-500)' }}>Montant restant du</div>
+                <div style={{ fontSize: '2rem', fontWeight: 800, color: '#ef4444' }}>{debtData.invoice.remaining.toFixed(2)} EUR</div>
+              </div>
+              <button className="btn btn-primary" style={{ width: '100%' }} onClick={printDebtDoc}>
+                Imprimer la reconnaissance de dette
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

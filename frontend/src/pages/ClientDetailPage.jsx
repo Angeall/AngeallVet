@@ -115,6 +115,7 @@ export default function ClientDetailPage() {
       city: client?.city || '',
       country: client?.country || 'France',
       notes: client?.notes || '',
+      vat_number: client?.vat_number || '',
     });
     setShowEditModal(true);
   };
@@ -197,6 +198,20 @@ export default function ClientDetailPage() {
         );
       })()}
 
+      {(() => {
+        const fosterAnimals = animals.filter(a => a.association_name);
+        if (fosterAnimals.length === 0) return null;
+        const assocNames = [...new Set(fosterAnimals.map(a => a.association_name))];
+        return (
+          <div className="alert-banner" style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f3e8ff', border: '1px solid #d8b4fe', borderRadius: '8px', padding: '10px 16px', marginBottom: '16px' }}>
+            <span style={{ fontSize: '1.2rem' }}>&#x1f3e0;</span>
+            <span style={{ color: '#7c3aed', fontWeight: 500 }}>
+              Famille d'accueil : {assocNames.join(', ')}
+            </span>
+          </div>
+        );
+      })()}
+
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-icon blue">P</div>
@@ -230,6 +245,11 @@ export default function ClientDetailPage() {
         <div style={{ marginTop: '8px' }}>
           <strong>Adresse:</strong> {client.address} {client.postal_code} {client.city}
         </div>
+        {client.vat_number && (
+          <div style={{ marginTop: '8px' }}>
+            <strong>N TVA:</strong> {client.vat_number}
+          </div>
+        )}
       </div>
 
       <div className="tabs">
@@ -314,7 +334,7 @@ export default function ClientDetailPage() {
           )}
 
           <table>
-            <thead><tr><th>Nom</th><th>Espece</th><th>Race</th><th>Sexe</th><th>Puce</th></tr></thead>
+            <thead><tr><th>Nom</th><th>Espece</th><th>Race</th><th>Sexe</th><th>Puce</th><th>Association</th></tr></thead>
             <tbody>
               {animals.map((a) => (
                 <tr key={a.id}>
@@ -323,6 +343,7 @@ export default function ClientDetailPage() {
                   <td>{a.breed || '-'}</td>
                   <td>{a.sex}</td>
                   <td>{a.microchip_number || '-'}</td>
+                  <td>{a.association_name ? <span className="badge badge-purple">{a.association_name}</span> : '-'}</td>
                 </tr>
               ))}
             </tbody>
@@ -479,6 +500,12 @@ export default function ClientDetailPage() {
                 <div className="form-group">
                   <label className="form-label">Pays</label>
                   <input className="form-input" value={editForm.country} onChange={(e) => setEditForm({ ...editForm, country: e.target.value })} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">N TVA (entreprises)</label>
+                  <input className="form-input" placeholder="FR12345678901" value={editForm.vat_number} onChange={(e) => setEditForm({ ...editForm, vat_number: e.target.value })} />
                 </div>
               </div>
               <div className="form-group">

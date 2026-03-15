@@ -21,6 +21,7 @@ class Client(Base):
     latitude = Column(Numeric(10, 7))
     longitude = Column(Numeric(10, 7))
     notes = Column(Text)
+    vat_number = Column(String(50))
     account_balance = Column(Numeric(10, 2), default=0)
     is_active = Column(Boolean, default=True)
     merged_into_id = Column(Integer, nullable=True)

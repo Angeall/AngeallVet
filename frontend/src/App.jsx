@@ -25,6 +25,9 @@ import SalesPage from './pages/SalesPage';
 import StatsPage from './pages/StatsPage';
 import DebtsPage from './pages/DebtsPage';
 import UsersPage from './pages/UsersPage';
+import SettingsPage from './pages/SettingsPage';
+import ControlledSubstancesPage from './pages/ControlledSubstancesPage';
+import AssociationsPage from './pages/AssociationsPage';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -65,6 +68,9 @@ function App() {
                   <Route path="/debts" element={<DebtsPage />} />
                   <Route path="/stats" element={<StatsPage />} />
                   <Route path="/users" element={<UsersPage />} />
+                  <Route path="/controlled-substances" element={<ControlledSubstancesPage />} />
+                  <Route path="/associations" element={<AssociationsPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
                 </Routes>
               </Layout>
             </PrivateRoute>

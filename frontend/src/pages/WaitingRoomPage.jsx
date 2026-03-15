@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { appointmentsAPI } from '../services/api';
+import { appointmentsAPI, authAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 const statusLabels = {
@@ -18,10 +18,18 @@ const statusColors = {
 
 export default function WaitingRoomPage() {
   const [appointments, setAppointments] = useState([]);
+  const [vets, setVets] = useState([]);
+  const [filterVetId, setFilterVetId] = useState('');
+
+  useEffect(() => {
+    authAPI.listStaff().then(res => setVets((res.data || []).filter(u => u.role === 'veterinarian' || u.role === 'admin'))).catch(() => {});
+  }, []);
 
   const load = async () => {
     try {
-      const res = await appointmentsAPI.waitingRoom();
+      const params = {};
+      if (filterVetId) params.veterinarian_id = parseInt(filterVetId);
+      const res = await appointmentsAPI.waitingRoom(params);
       setAppointments(res.data);
     } catch {
       toast.error('Erreur de chargement');
@@ -32,7 +40,7 @@ export default function WaitingRoomPage() {
     load();
     const interval = setInterval(load, 30000); // Refresh every 30s
     return () => clearInterval(interval);
-  }, []);
+  }, [filterVetId]);
 
   const updateStatus = async (id, status) => {
     try {
@@ -51,6 +59,10 @@ export default function WaitingRoomPage() {
           <h1 className="page-title">Salle d'attente</h1>
         </div>
         <div className="page-header-actions">
+          <select className="form-select" style={{ width: 'auto' }} value={filterVetId} onChange={(e) => setFilterVetId(e.target.value)}>
+            <option value="">Tous les vétérinaires</option>
+            {vets.map(v => <option key={v.id} value={v.id}>Dr. {v.last_name} {v.first_name}</option>)}
+          </select>
           <button className="btn btn-secondary btn-sm" onClick={load}>Rafraîchir</button>
         </div>
       </div>
@@ -69,6 +81,9 @@ export default function WaitingRoomPage() {
                 {new Date(appt.start_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                 {' - '}
                 {appt.reason || appt.appointment_type}
+                {appt.client_name && <span style={{ marginLeft: '8px', fontWeight: 500 }}>{appt.client_name}</span>}
+                {appt.animal_name && <span style={{ color: 'var(--gray-500)', marginLeft: '4px' }}>({appt.animal_name})</span>}
+                {appt.veterinarian_name && <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)', marginLeft: '8px' }}>{appt.veterinarian_name}</span>}
               </div>
               <span className={`badge badge-${statusColors[appt.status]}`}>
                 {statusLabels[appt.status]}
@@ -81,14 +96,24 @@ export default function WaitingRoomPage() {
                 </button>
               )}
               {appt.status === 'arrived' && (
-                <button className="btn btn-primary btn-sm" onClick={() => updateStatus(appt.id, 'in_progress')}>
-                  En consultation
-                </button>
+                <>
+                  <button className="btn btn-secondary btn-sm" style={{ color: 'var(--gray-500)' }} onClick={() => updateStatus(appt.id, 'scheduled')}>
+                    &#8592; Planifié
+                  </button>
+                  <button className="btn btn-primary btn-sm" onClick={() => updateStatus(appt.id, 'in_progress')}>
+                    En consultation
+                  </button>
+                </>
               )}
               {appt.status === 'in_progress' && (
-                <button className="btn btn-success btn-sm" onClick={() => updateStatus(appt.id, 'completed')}>
-                  Terminer
-                </button>
+                <>
+                  <button className="btn btn-secondary btn-sm" style={{ color: 'var(--gray-500)' }} onClick={() => updateStatus(appt.id, 'arrived')}>
+                    &#8592; Arrivé
+                  </button>
+                  <button className="btn btn-success btn-sm" onClick={() => updateStatus(appt.id, 'completed')}>
+                    Terminer
+                  </button>
+                </>
               )}
             </div>
           </div>

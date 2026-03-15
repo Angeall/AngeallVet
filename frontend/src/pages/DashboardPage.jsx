@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { appointmentsAPI, billingAPI, inventoryAPI, hospitalizationAPI } from '../services/api';
+import { appointmentsAPI, billingAPI, inventoryAPI, hospitalizationAPI, communicationsAPI } from '../services/api';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -36,6 +36,44 @@ export default function DashboardPage() {
     }
     load();
   }, []);
+
+  const printPostalReminders = async () => {
+    try {
+      const res = await communicationsAPI.postalDueReminders();
+      const reminders = res.data;
+      if (!reminders || reminders.length === 0) {
+        alert('Aucun rappel postal en attente.');
+        return;
+      }
+      const w = window.open('', '_blank');
+      const letters = reminders.map(r => {
+        const template = r.postal_template || `Madame, Monsieur ${r.client_name},\n\nNous vous rappelons que votre animal ${r.animal_name} (${r.species || ''}) doit recevoir son rappel de vaccination "${r.vaccine_name}".\n\nDate prevue : ${r.due_date}\n\nNous vous invitons a prendre rendez-vous au plus vite.\n\nCordialement,\nVotre clinique veterinaire`;
+        return `
+          <div style="page-break-after: always; padding: 40px; font-family: serif; font-size: 14px; line-height: 1.6;">
+            <div style="text-align: right; margin-bottom: 40px;">
+              <strong>${r.client_name}</strong><br/>
+              ${r.client_address}<br/>
+              ${r.client_postal_code} ${r.client_city}
+            </div>
+            <div style="margin-bottom: 30px; text-align: right; font-size: 12px; color: #666;">
+              Le ${new Date().toLocaleDateString('fr-FR')}
+            </div>
+            <div style="white-space: pre-wrap;">${template
+              .replace(/\{client_name\}/g, r.client_name)
+              .replace(/\{animal_name\}/g, r.animal_name)
+              .replace(/\{species\}/g, r.species || '')
+              .replace(/\{vaccine_name\}/g, r.vaccine_name)
+              .replace(/\{due_date\}/g, r.due_date)
+            }</div>
+          </div>`;
+      }).join('');
+      w.document.write(`<html><head><title>Rappels postaux</title></head><body>${letters}</body></html>`);
+      w.document.close();
+      w.print();
+    } catch {
+      alert('Erreur lors du chargement des rappels postaux.');
+    }
+  };
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon apres-midi' : 'Bonsoir';
@@ -99,6 +137,18 @@ export default function DashboardPage() {
             <div className="stat-label">Hospitalisations</div>
           </div>
         </Link>
+      </div>
+
+      <div className="card" style={{ marginBottom: '16px' }}>
+        <div className="card-header">
+          <h3 className="card-title">Rappels vaccins postaux</h3>
+          <button className="btn btn-secondary btn-sm" onClick={printPostalReminders}>
+            Imprimer les courriers
+          </button>
+        </div>
+        <p style={{ fontSize: '0.85rem', color: 'var(--gray-500)' }}>
+          Imprime les lettres de rappel vaccination pour les clients configures en canal postal.
+        </p>
       </div>
 
       {stats.waitingRoom.length > 0 && (

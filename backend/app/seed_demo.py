@@ -5,7 +5,7 @@ Run: python -m app.seed_demo
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
-from app.core.database import SessionLocal, engine, Base
+from app.core.database import _default_session_factory as SessionLocal, _default_engine as engine, Base
 from app.core.supabase import get_supabase_admin
 from app.models.user import User, UserRole
 from app.models.client import Client

@@ -36,6 +36,9 @@ class AppointmentUpdate(BaseModel):
 class AppointmentResponse(AppointmentBase):
     id: int
     status: AppointmentStatus
+    veterinarian_name: Optional[str] = None
+    client_name: Optional[str] = None
+    animal_name: Optional[str] = None
     google_event_id: Optional[str] = None
     created_at: datetime
 

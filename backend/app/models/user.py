@@ -84,6 +84,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     google_calendar_token = Column(String(500))
+    sidenav_color = Column(String(7))  # hex color e.g. "#1e3a5f"
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

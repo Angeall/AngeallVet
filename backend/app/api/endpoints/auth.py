@@ -112,6 +112,25 @@ def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.put("/me", response_model=UserResponse)
+def update_me(
+    data: UserUpdate,
+    db: Session = Depends(get_central_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Allow any authenticated user to update their own profile (limited fields)."""
+    allowed = {"sidenav_color", "phone"}
+    update_data = data.model_dump(exclude_unset=True)
+    for field in list(update_data):
+        if field not in allowed:
+            del update_data[field]
+    for field, value in update_data.items():
+        setattr(current_user, field, value)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
 @router.get("/users", response_model=list[UserResponse])
 def list_users(
     db: Session = Depends(get_central_db),

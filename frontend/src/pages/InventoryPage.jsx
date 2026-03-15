@@ -35,6 +35,13 @@ export default function InventoryPage() {
     } catch { toast.error('Erreur'); }
   };
 
+  const toggleControlled = async (product) => {
+    try {
+      await inventoryAPI.updateProduct(product.id, { is_controlled_substance: !product.is_controlled_substance });
+      setProducts(products.map(p => p.id === product.id ? { ...p, is_controlled_substance: !p.is_controlled_substance } : p));
+    } catch { toast.error('Erreur'); }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -137,42 +144,62 @@ export default function InventoryPage() {
                 <th>Reference</th>
                 <th>Nom</th>
                 <th>Type</th>
-                <th>EAN13</th>
                 <th>Prix vente</th>
-                <th>TVA</th>
                 <th>Stock</th>
-                <th>Seuil</th>
+                <th>Lots</th>
+                <th style={{ textAlign: 'center' }}>Ctrl</th>
                 <th style={{ textAlign: 'center' }}>Raccourci</th>
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => (
-                <tr key={p.id}>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{p.reference}</td>
-                  <td style={{ fontWeight: 500 }}>
-                    <Link to={`/inventory/${p.id}`} className="table-link">{p.name}</Link>
-                  </td>
-                  <td><span className="badge badge-blue">{typeLabels[p.product_type]}</span></td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{p.ean13 || '-'}</td>
-                  <td>{parseFloat(p.selling_price).toFixed(2)} EUR</td>
-                  <td>{parseFloat(p.vat_rate).toFixed(0)}%</td>
-                  <td>
-                    {p.product_type === 'service' ? (
-                      <span className="badge badge-blue">&#8734;</span>
-                    ) : (
-                      <span className={`badge ${parseFloat(p.stock_quantity) <= parseFloat(p.stock_alert_threshold) ? 'badge-red' : 'badge-green'}`}>
-                        {parseFloat(p.stock_quantity)} {p.unit || ''}
-                      </span>
-                    )}
-                  </td>
-                  <td>{p.product_type === 'service' ? '-' : parseFloat(p.stock_alert_threshold)}</td>
-                  <td style={{ textAlign: 'center' }}>
-                    <input type="checkbox" checked={!!p.is_shortcut} onChange={() => toggleShortcut(p)} title="Afficher comme raccourci facturation" />
-                  </td>
-                </tr>
-              ))}
+              {products.map((p) => {
+                const lots = p.lots || [];
+                const nearestExpiry = lots.length > 0
+                  ? lots.reduce((min, l) => (!min || l.expiry_date < min) ? l.expiry_date : min, null)
+                  : null;
+                const isExpiringSoon = nearestExpiry && new Date(nearestExpiry) < new Date(Date.now() + 90 * 86400000);
+                return (
+                  <tr key={p.id}>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{p.reference}</td>
+                    <td style={{ fontWeight: 500 }}>
+                      <Link to={`/inventory/${p.id}`} className="table-link">{p.name}</Link>
+                    </td>
+                    <td><span className="badge badge-blue">{typeLabels[p.product_type]}</span></td>
+                    <td>{parseFloat(p.selling_price).toFixed(2)} EUR</td>
+                    <td>
+                      {p.product_type === 'service' ? (
+                        <span className="badge badge-blue">&#8734;</span>
+                      ) : (
+                        <span className={`badge ${parseFloat(p.stock_quantity) <= parseFloat(p.stock_alert_threshold) ? 'badge-red' : 'badge-green'}`}>
+                          {parseFloat(p.stock_quantity)} {p.unit || ''}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {(p.product_type === 'medication' || p.product_type === 'food') ? (
+                        <span>
+                          <span className="badge badge-blue">{lots.length}</span>
+                          {nearestExpiry && (
+                            <span style={{ fontSize: '0.75rem', marginLeft: '4px', color: isExpiringSoon ? 'var(--red, #ef4444)' : 'var(--gray-400)' }}>
+                              {isExpiringSoon ? '!' : ''}{nearestExpiry}
+                            </span>
+                          )}
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {p.product_type === 'medication' ? (
+                        <input type="checkbox" checked={!!p.is_controlled_substance} onChange={() => toggleControlled(p)} title="Substance controlee" />
+                      ) : '-'}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <input type="checkbox" checked={!!p.is_shortcut} onChange={() => toggleShortcut(p)} title="Afficher comme raccourci facturation" />
+                    </td>
+                  </tr>
+                );
+              })}
               {products.length === 0 && (
-                <tr><td colSpan="9" className="table-empty">Aucun produit trouve</td></tr>
+                <tr><td colSpan="8" className="table-empty">Aucun produit trouve</td></tr>
               )}
             </tbody>
           </table>

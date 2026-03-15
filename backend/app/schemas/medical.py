@@ -51,6 +51,21 @@ class PrescriptionResponse(BaseModel):
         from_attributes = True
 
 
+class HomeTreatmentProduct(BaseModel):
+    product_id: int
+    quantity: Decimal = Decimal("1")
+
+
+class HomeTreatmentProductResponse(BaseModel):
+    id: int
+    product_id: int
+    quantity: Decimal
+    treatment_location: str = "home"
+
+    class Config:
+        from_attributes = True
+
+
 class MedicalRecordBase(BaseModel):
     animal_id: int
     record_type: RecordType
@@ -66,6 +81,9 @@ class MedicalRecordBase(BaseModel):
 
 class MedicalRecordCreate(MedicalRecordBase):
     prescriptions: List[PrescriptionCreate] = []
+    weight_kg: Optional[Decimal] = None
+    home_treatment_products: List[HomeTreatmentProduct] = []
+    onsite_treatment_products: List[HomeTreatmentProduct] = []
 
 
 class MedicalRecordResponse(MedicalRecordBase):
@@ -73,7 +91,21 @@ class MedicalRecordResponse(MedicalRecordBase):
     veterinarian_id: int
     prescriptions: List[PrescriptionResponse] = []
     attachments: List[AttachmentResponse] = []
+    home_treatment_products: List[HomeTreatmentProductResponse] = []
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TemplateProductCreate(BaseModel):
+    product_id: int
+    quantity: Decimal = Decimal("1")
+    treatment_location: str = "onsite"
+
+
+class TemplateProductResponse(TemplateProductCreate):
+    id: int
 
     class Config:
         from_attributes = True
@@ -87,11 +119,22 @@ class ConsultationTemplateCreate(BaseModel):
     objective: Optional[str] = None
     assessment: Optional[str] = None
     plan: Optional[str] = None
+    home_treatment: Optional[str] = None
+    products: List[TemplateProductCreate] = []
 
 
-class ConsultationTemplateResponse(ConsultationTemplateCreate):
+class ConsultationTemplateResponse(BaseModel):
     id: int
+    name: str
+    category: Optional[str] = None
+    species: Optional[str] = None
+    subjective: Optional[str] = None
+    objective: Optional[str] = None
+    assessment: Optional[str] = None
+    plan: Optional[str] = None
+    home_treatment: Optional[str] = None
     is_active: bool
+    products: List[TemplateProductResponse] = []
     created_at: datetime
 
     class Config:

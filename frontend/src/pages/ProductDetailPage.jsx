@@ -10,6 +10,8 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ean13: '', notes: '' });
+  const [showLotForm, setShowLotForm] = useState(false);
+  const [lotForm, setLotForm] = useState({ lot_number: '', expiry_date: '', quantity: '' });
 
   useEffect(() => {
     async function load() {
@@ -39,7 +41,27 @@ export default function ProductDetailPage() {
     }
   };
 
+  const handleLotSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await inventoryAPI.addLot(id, {
+        lot_number: lotForm.lot_number,
+        expiry_date: lotForm.expiry_date,
+        quantity: parseFloat(lotForm.quantity),
+      });
+      toast.success('Lot ajoute');
+      setShowLotForm(false);
+      setLotForm({ lot_number: '', expiry_date: '', quantity: '' });
+      const res = await inventoryAPI.getProduct(id);
+      setProduct(res.data);
+    } catch {
+      toast.error('Erreur lors de l\'ajout du lot');
+    }
+  };
+
   if (!product) return <div className="page-content">Chargement...</div>;
+
+  const showLots = product.product_type === 'medication' || product.product_type === 'food';
 
   return (
     <div>
@@ -48,10 +70,13 @@ export default function ProductDetailPage() {
           <Link to="/inventory" className="breadcrumb-link">Stocks & Pharmacie /</Link>
           <h1 className="page-title">{product.name}</h1>
         </div>
-        <div className="page-header-actions">
+        <div className="page-header-actions" style={{ display: 'flex', gap: '8px' }}>
           <span className={`badge badge-${product.product_type === 'medication' ? 'green' : 'blue'}`}>
             {typeLabels[product.product_type]}
           </span>
+          {product.is_controlled_substance && (
+            <span className="badge badge-red">Substance controlee</span>
+          )}
         </div>
       </div>
 
@@ -141,19 +166,69 @@ export default function ProductDetailPage() {
         )}
       </div>
 
-      {product.lots && product.lots.length > 0 && (
+      {showLots && (
         <div className="card">
-          <h3 className="card-title" style={{ marginBottom: '16px' }}>Lots</h3>
+          <div className="card-header">
+            <h3 className="card-title">Lots ({(product.lots || []).length})</h3>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowLotForm(!showLotForm)}>+ Ajouter un lot</button>
+          </div>
+
+          {showLotForm && (
+            <div style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+              <form onSubmit={handleLotSubmit}>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">N de lot *</label>
+                    <input className="form-input" value={lotForm.lot_number} onChange={(e) => setLotForm({ ...lotForm, lot_number: e.target.value })} required placeholder="Ex: LOT-2025-001" style={{ fontFamily: 'monospace' }} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Date d'expiration *</label>
+                    <input type="date" className="form-input" value={lotForm.expiry_date} onChange={(e) => setLotForm({ ...lotForm, expiry_date: e.target.value })} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Quantite *</label>
+                    <input type="number" step="0.01" className="form-input" value={lotForm.quantity} onChange={(e) => setLotForm({ ...lotForm, quantity: e.target.value })} required />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="submit" className="btn btn-primary">Ajouter</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowLotForm(false)}>Annuler</button>
+                </div>
+              </form>
+            </div>
+          )}
+
           <table>
-            <thead><tr><th>N° Lot</th><th>Date d'expiration</th><th>Quantite</th></tr></thead>
+            <thead><tr><th>N Lot</th><th>Date d'expiration</th><th>Quantite</th><th>Statut</th></tr></thead>
             <tbody>
-              {product.lots.map((lot) => (
-                <tr key={lot.id}>
-                  <td style={{ fontFamily: 'monospace' }}>{lot.lot_number}</td>
-                  <td>{lot.expiry_date}</td>
-                  <td>{parseFloat(lot.quantity)}</td>
-                </tr>
-              ))}
+              {(product.lots || []).map((lot) => {
+                const expDate = new Date(lot.expiry_date);
+                const now = new Date();
+                const daysLeft = Math.ceil((expDate - now) / 86400000);
+                const isExpired = daysLeft < 0;
+                const isExpiringSoon = !isExpired && daysLeft <= 90;
+                return (
+                  <tr key={lot.id}>
+                    <td style={{ fontFamily: 'monospace' }}>{lot.lot_number}</td>
+                    <td style={{ color: isExpired ? 'var(--red, #ef4444)' : isExpiringSoon ? '#f59e0b' : 'inherit', fontWeight: isExpired || isExpiringSoon ? 600 : 400 }}>
+                      {lot.expiry_date}
+                    </td>
+                    <td>{parseFloat(lot.quantity)}</td>
+                    <td>
+                      {isExpired ? (
+                        <span className="badge badge-red">Expire</span>
+                      ) : isExpiringSoon ? (
+                        <span className="badge badge-amber">Expire dans {daysLeft}j</span>
+                      ) : (
+                        <span className="badge badge-green">OK</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {(product.lots || []).length === 0 && (
+                <tr><td colSpan="4" className="table-empty">Aucun lot enregistre</td></tr>
+              )}
             </tbody>
           </table>
         </div>
