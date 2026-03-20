@@ -27,6 +27,7 @@ class MedicalRecord(Base):
     appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True, index=True)
     record_type = Column(SAEnum(RecordType), nullable=False, index=True)
     # SOAP format
+    context = Column(Text)     # Contexte / Description du RDV
     subjective = Column(Text)  # Motif / Anamnèse
     objective = Column(Text)   # Examen clinique
     assessment = Column(Text)  # Diagnostic

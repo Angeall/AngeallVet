@@ -87,6 +87,24 @@ class ClientResponse(ClientBase):
         from_attributes = True
 
 
+class ClientNoteCreate(BaseModel):
+    content: str
+    source: str = "manual"  # manual, appointment
+
+
+class ClientNoteResponse(BaseModel):
+    id: int
+    client_id: int
+    content: str
+    source: str = "manual"
+    created_by_id: int
+    created_by_name: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class ClientMergeRequest(BaseModel):
     source_client_id: int
     target_client_id: int

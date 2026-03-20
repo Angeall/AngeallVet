@@ -72,6 +72,7 @@ class HomeTreatmentProductResponse(BaseModel):
 class MedicalRecordBase(BaseModel):
     animal_id: int
     record_type: RecordType
+    context: Optional[str] = None
     subjective: Optional[str] = None
     objective: Optional[str] = None
     assessment: Optional[str] = None

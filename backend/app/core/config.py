@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     ENCRYPTION_KEY: str = ""
     DATA_RETENTION_YEARS: int = 5
 
+    # Initial admin (created on first startup if no users exist)
+    INITIAL_ADMIN_EMAIL: str = ""
+    INITIAL_ADMIN_PASSWORD: str = ""
+    INITIAL_ADMIN_FIRST_NAME: str = "Admin"
+    INITIAL_ADMIN_LAST_NAME: str = "AngeallVet"
+
     # Demo
     DEMO_MODE: bool = False
     SEED_DEMO_DATA: bool = False

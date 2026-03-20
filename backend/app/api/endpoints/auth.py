@@ -170,14 +170,24 @@ def update_user(
 
     update_data = data.model_dump(exclude_unset=True)
 
-    # Sync email change to Supabase
+    # Build Supabase update payload for synced fields
+    sb_update: dict = {}
     if "email" in update_data and update_data["email"] != user.email:
+        sb_update["email"] = update_data["email"]
+    meta_sync = {}
+    if "first_name" in update_data:
+        meta_sync["first_name"] = update_data["first_name"]
+    if "last_name" in update_data:
+        meta_sync["last_name"] = update_data["last_name"]
+    if "role" in update_data:
+        meta_sync["role"] = update_data["role"].value if hasattr(update_data["role"], "value") else update_data["role"]
+    if meta_sync:
+        sb_update["user_metadata"] = meta_sync
+
+    if sb_update:
         supabase = get_supabase_admin()
         try:
-            supabase.auth.admin.update_user_by_id(
-                user.supabase_uid,
-                {"email": update_data["email"]},
-            )
+            supabase.auth.admin.update_user_by_id(user.supabase_uid, sb_update)
         except AuthApiError as e:
             raise HTTPException(status_code=400, detail=f"Erreur Supabase: {e.message}")
 

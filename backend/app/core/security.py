@@ -94,48 +94,15 @@ def verify_supabase_token(token: str) -> dict:
         )
 
 
-def _auto_provision_user(supabase_uid: str, db: Session):
-    """Create a local profile for a Supabase user who doesn't have one yet."""
-    from app.core.supabase import get_supabase_admin
-    from app.models.user import User, UserRole
-
-    try:
-        sb = get_supabase_admin()
-        sb_user = sb.auth.admin.get_user_by_id(supabase_uid)
-    except Exception:
-        logger.exception("Failed to fetch Supabase user %s for auto-provisioning", supabase_uid)
-        raise HTTPException(
-            status_code=401,
-            detail="Profil utilisateur non trouvé. Contactez un administrateur.",
-        )
-
-    meta = sb_user.user.user_metadata or {}
-    role_str = meta.get("role", UserRole.VETERINARIAN.value)
-    try:
-        role = UserRole(role_str)
-    except ValueError:
-        role = UserRole.VETERINARIAN
-
-    user = User(
-        supabase_uid=supabase_uid,
-        email=sb_user.user.email,
-        first_name=meta.get("first_name", ""),
-        last_name=meta.get("last_name", ""),
-        role=role,
-        phone=meta.get("phone", None),
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    logger.info("Auto-provisioned local profile for %s (%s)", user.email, user.role.value)
-    return user
-
-
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
     db: Session = Depends(get_central_db),
 ):
-    """Extract user from Supabase JWT, find local profile, and route to tenant DB."""
+    """Extract user from Supabase JWT, find local profile, and route to tenant DB.
+
+    Users must be explicitly created by an admin via /auth/register.
+    A valid Supabase token alone is NOT enough — a matching local profile is required.
+    """
     from app.models.user import User
     from app.models.tenant import Tenant
     from app.core.database import set_tenant_db_url
@@ -147,7 +114,10 @@ def get_current_user(
 
     user = db.query(User).filter(User.supabase_uid == supabase_uid).first()
     if user is None:
-        user = _auto_provision_user(supabase_uid, db)
+        raise HTTPException(
+            status_code=401,
+            detail="Profil utilisateur non trouvé. Contactez un administrateur.",
+        )
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé")
 

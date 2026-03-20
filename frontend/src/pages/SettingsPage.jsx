@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { settingsAPI, animalsAPI, medicalAPI, inventoryAPI } from '../services/api';
+import { settingsAPI, animalsAPI, medicalAPI, inventoryAPI, authAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function SettingsPage() {
@@ -34,6 +34,12 @@ export default function SettingsPage() {
   const [productResults, setProductResults] = useState([]);
   const [productLocation, setProductLocation] = useState('onsite');
   const searchTimeout = useRef(null);
+
+  // Users state
+  const [users, setUsers] = useState([]);
+  const [editingUser, setEditingUser] = useState(null);
+  const [userForm, setUserForm] = useState({ first_name: '', last_name: '', email: '', role: 'assistant', phone: '', password: '' });
+  const [showUserForm, setShowUserForm] = useState(false);
 
   // ---- Clinic ----
   const loadClinic = useCallback(async () => {
@@ -102,10 +108,21 @@ export default function SettingsPage() {
     loadVatRates();
   }, [loadClinic, loadVatRates]);
 
+  // ---- Users ----
+  const loadUsers = useCallback(async () => {
+    try {
+      const res = await authAPI.listUsers();
+      setUsers(res.data);
+    } catch {
+      toast.error('Erreur de chargement des utilisateurs');
+    }
+  }, []);
+
   useEffect(() => {
     if (tab === 'species') loadSpecies();
     if (tab === 'templates') { loadTemplates(); loadSpeciesForTemplates(); }
-  }, [tab, loadSpecies, loadTemplates, loadSpeciesForTemplates]);
+    if (tab === 'users') loadUsers();
+  }, [tab, loadSpecies, loadTemplates, loadSpeciesForTemplates, loadUsers]);
 
   // ---- Clinic handlers ----
   const handleClinicSubmit = async (e) => {
@@ -349,6 +366,57 @@ export default function SettingsPage() {
     return s ? s.label : '-';
   };
 
+  // ---- User handlers ----
+  const ROLE_LABELS = { admin: 'Administrateur', veterinarian: 'Veterinaire', assistant: 'Assistant(e)', accountant: 'Comptable', guest: 'Invite' };
+
+  const resetUserForm = () => {
+    setUserForm({ first_name: '', last_name: '', email: '', role: 'assistant', phone: '', password: '' });
+    setEditingUser(null);
+    setShowUserForm(false);
+  };
+
+  const startEditUser = (u) => {
+    setUserForm({ first_name: u.first_name, last_name: u.last_name, email: u.email, role: u.role, phone: u.phone || '', password: '' });
+    setEditingUser(u);
+    setShowUserForm(true);
+  };
+
+  const handleUserSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingUser) {
+        const payload = { first_name: userForm.first_name, last_name: userForm.last_name, role: userForm.role, phone: userForm.phone || null };
+        await authAPI.updateUser(editingUser.id, payload);
+        toast.success('Utilisateur mis a jour');
+      } else {
+        if (!userForm.password) { toast.error('Le mot de passe est requis'); return; }
+        await authAPI.register({
+          email: userForm.email,
+          password: userForm.password,
+          first_name: userForm.first_name,
+          last_name: userForm.last_name,
+          role: userForm.role,
+          phone: userForm.phone || null,
+        });
+        toast.success('Utilisateur cree');
+      }
+      resetUserForm();
+      loadUsers();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur lors de la sauvegarde');
+    }
+  };
+
+  const toggleUserActive = async (u) => {
+    try {
+      await authAPI.updateUser(u.id, { is_active: !u.is_active });
+      toast.success(u.is_active ? 'Utilisateur desactive' : 'Utilisateur reactive');
+      loadUsers();
+    } catch {
+      toast.error('Erreur');
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -370,6 +438,9 @@ export default function SettingsPage() {
         </button>
         <button className={tab === 'templates' ? 'tab active' : 'tab'} onClick={() => setTab('templates')}>
           Templates SOAP
+        </button>
+        <button className={tab === 'users' ? 'tab active' : 'tab'} onClick={() => setTab('users')}>
+          Utilisateurs
         </button>
       </div>
 
@@ -592,6 +663,109 @@ export default function SettingsPage() {
                 {species.length === 0 && (
                   <tr><td colSpan="4" className="table-empty">
                     Aucune espece configuree. Cliquez sur "+ Nouvelle espece" pour commencer.
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ---- USERS TAB ---- */}
+      {tab === 'users' && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">Utilisateurs</h3>
+            <button className="btn btn-primary btn-sm" onClick={() => { if (showUserForm) resetUserForm(); else setShowUserForm(true); }}>
+              {showUserForm ? 'Fermer' : '+ Nouvel utilisateur'}
+            </button>
+          </div>
+
+          {showUserForm && (
+            <div style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+              <form onSubmit={handleUserSubmit}>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Prenom *</label>
+                    <input className="form-input" value={userForm.first_name} onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Nom *</label>
+                    <input className="form-input" value={userForm.last_name} onChange={(e) => setUserForm({ ...userForm, last_name: e.target.value })} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Role *</label>
+                    <select className="form-select" value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })} required>
+                      {Object.entries(ROLE_LABELS).map(([val, lbl]) => (
+                        <option key={val} value={val}>{lbl}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Email *</label>
+                    <input type="email" className="form-input" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} required disabled={!!editingUser} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Telephone</label>
+                    <input className="form-input" value={userForm.phone} onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })} />
+                  </div>
+                  {!editingUser && (
+                    <div className="form-group">
+                      <label className="form-label">Mot de passe *</label>
+                      <input type="password" className="form-input" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required />
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="submit" className="btn btn-primary">
+                    {editingUser ? 'Mettre a jour' : 'Creer'}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={resetUserForm}>Annuler</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nom</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} style={!u.is_active ? { opacity: 0.5 } : undefined}>
+                    <td style={{ fontWeight: 600 }}>{u.first_name} {u.last_name}</td>
+                    <td>{u.email}</td>
+                    <td><span className="badge badge-blue">{ROLE_LABELS[u.role] || u.role}</span></td>
+                    <td>
+                      <span className={`badge ${u.is_active ? 'badge-green' : 'badge-gray'}`}>
+                        {u.is_active ? 'Actif' : 'Inactif'}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => startEditUser(u)}>
+                          Modifier
+                        </button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => toggleUserActive(u)}
+                          style={u.is_active ? { color: 'var(--danger)' } : { color: 'var(--success)' }}>
+                          {u.is_active ? 'Desactiver' : 'Reactiver'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {users.length === 0 && (
+                  <tr><td colSpan="5" className="table-empty">
+                    Aucun utilisateur. Cliquez sur "+ Nouvel utilisateur" pour commencer.
                   </td></tr>
                 )}
               </tbody>

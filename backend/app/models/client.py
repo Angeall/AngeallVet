@@ -31,6 +31,7 @@ class Client(Base):
     animals = relationship("Animal", back_populates="owner", lazy="selectin")
     invoices = relationship("Invoice", back_populates="client", lazy="dynamic")
     alerts = relationship("ClientAlert", back_populates="client", lazy="selectin")
+    notes_list = relationship("ClientNote", back_populates="client", lazy="dynamic")
 
 
 class ClientAlert(Base):
@@ -45,3 +46,17 @@ class ClientAlert(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     client = relationship("Client", back_populates="alerts")
+
+
+class ClientNote(Base):
+    __tablename__ = "client_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    source = Column(String(30), default="manual")  # manual, appointment
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    client = relationship("Client", back_populates="notes_list")
+    created_by = relationship("User")

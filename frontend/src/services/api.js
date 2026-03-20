@@ -61,6 +61,9 @@ export const clientsAPI = {
   merge: (data) => api.post('/clients/merge', data),
   addAlert: (id, data) => api.post(`/clients/${id}/alerts`, data),
   removeAlert: (id, alertId) => api.delete(`/clients/${id}/alerts/${alertId}`),
+  listNotes: (id, params) => api.get(`/clients/${id}/notes`, { params }),
+  addNote: (id, data) => api.post(`/clients/${id}/notes`, data),
+  deleteNote: (id, noteId) => api.delete(`/clients/${id}/notes/${noteId}`),
 };
 
 // Animals

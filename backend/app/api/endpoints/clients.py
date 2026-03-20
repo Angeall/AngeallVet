@@ -6,11 +6,13 @@ from typing import Optional
 from app.api.deps import get_tenant_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.models.client import Client, ClientAlert
+from app.models.client import Client, ClientAlert, ClientNote
 from app.models.animal import Animal
+from app.models.user import User
 from app.schemas.client import (
     ClientCreate, ClientUpdate, ClientResponse, ClientMergeRequest,
     ClientAlertCreate, ClientAlertResponse,
+    ClientNoteCreate, ClientNoteResponse,
 )
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
@@ -160,4 +162,69 @@ def remove_client_alert(
     if not alert:
         raise HTTPException(status_code=404, detail="Alerte non trouvée")
     alert.is_active = False
+    db.commit()
+
+
+# --- Client Notes ---
+def _enrich_note(note, db):
+    """Add created_by_name to a client note."""
+    data = ClientNoteResponse.model_validate(note).model_dump()
+    user = db.query(User).filter(User.id == note.created_by_id).first()
+    if user:
+        data["created_by_name"] = f"{user.last_name} {user.first_name}"
+    return data
+
+
+@router.get("/{client_id}/notes", response_model=list[ClientNoteResponse])
+def list_client_notes(
+    client_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(get_current_user),
+):
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client non trouvé")
+    notes = (
+        db.query(ClientNote)
+        .filter(ClientNote.client_id == client_id)
+        .order_by(ClientNote.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return [_enrich_note(n, db) for n in notes]
+
+
+@router.post("/{client_id}/notes", response_model=ClientNoteResponse, status_code=201)
+def add_client_note(
+    client_id: int,
+    data: ClientNoteCreate,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(get_current_user),
+):
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client non trouvé")
+    note = ClientNote(client_id=client_id, content=data.content, source=data.source, created_by_id=current_user.id)
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return _enrich_note(note, db)
+
+
+@router.delete("/{client_id}/notes/{note_id}", status_code=204)
+def delete_client_note(
+    client_id: int,
+    note_id: int,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(get_current_user),
+):
+    note = db.query(ClientNote).filter(
+        ClientNote.id == note_id, ClientNote.client_id == client_id
+    ).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note non trouvée")
+    db.delete(note)
     db.commit()

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { appointmentsAPI, authAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -82,7 +83,11 @@ export default function WaitingRoomPage() {
                 {' - '}
                 {appt.reason || appt.appointment_type}
                 {appt.client_name && <span style={{ marginLeft: '8px', fontWeight: 500 }}>{appt.client_name}</span>}
-                {appt.animal_name && <span style={{ color: 'var(--gray-500)', marginLeft: '4px' }}>({appt.animal_name})</span>}
+                {appt.animal_name && (
+                  <span style={{ marginLeft: '4px' }}>
+                    (<Link to={`/animals/${appt.animal_id}`} style={{ color: 'var(--primary)', textDecoration: 'none' }} title="Voir le dossier animal">{appt.animal_name}</Link>)
+                  </span>
+                )}
                 {appt.veterinarian_name && <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)', marginLeft: '8px' }}>{appt.veterinarian_name}</span>}
               </div>
               <span className={`badge badge-${statusColors[appt.status]}`}>

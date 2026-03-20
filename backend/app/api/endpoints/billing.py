@@ -60,6 +60,7 @@ def _enrich_invoice(inv, db):
 @router.get("/invoices", response_model=list[InvoiceResponse])
 def list_invoices(
     client_id: Optional[int] = Query(None),
+    veterinarian_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
@@ -72,6 +73,8 @@ def list_invoices(
     query = db.query(Invoice)
     if client_id:
         query = query.filter(Invoice.client_id == client_id)
+    if veterinarian_id:
+        query = query.join(InvoiceVeterinarian).filter(InvoiceVeterinarian.user_id == veterinarian_id)
     if status:
         query = query.filter(Invoice.status == status)
     if date_from:

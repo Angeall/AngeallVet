@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { appointmentsAPI, clientsAPI, animalsAPI, authAPI, settingsAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -27,7 +28,7 @@ export default function AgendaPage() {
   const [durationManuallySet, setDurationManuallySet] = useState(false);
   const [form, setForm] = useState({
     client_id: '', animal_id: '', veterinarian_id: '',
-    appointment_type: 'consultation', start_time: '', end_time: '', reason: '',
+    appointment_type: 'consultation', start_time: '', end_time: '', reason: '', notes: '',
   });
 
   // Search state
@@ -46,6 +47,9 @@ export default function AgendaPage() {
   // Quick animal creation modal
   const [showAnimalModal, setShowAnimalModal] = useState(false);
   const [animalForm, setAnimalForm] = useState({ name: '', species: 'dog', breed: '', sex: 'male' });
+
+  // Client note during appointment creation
+  const [clientNote, setClientNote] = useState('');
 
   // Edit appointment modal
   const [showEditModal, setShowEditModal] = useState(false);
@@ -137,11 +141,18 @@ export default function AgendaPage() {
         animal_id: form.animal_id ? parseInt(form.animal_id) : null,
         veterinarian_id: parseInt(form.veterinarian_id),
       });
+      // Create client note if provided
+      if (clientNote.trim() && form.client_id) {
+        try {
+          await clientsAPI.addNote(parseInt(form.client_id), { content: clientNote, source: 'appointment' });
+        } catch {}
+      }
       toast.success('RDV cree');
       setShowForm(false);
       setSelectedClient(null);
       setSelectedAnimal(null);
       setClientSearch('');
+      setClientNote('');
       setAnimalOptions([]);
       setDurationManuallySet(false);
       loadAppointments();
@@ -209,6 +220,7 @@ export default function AgendaPage() {
       start_time: appt.start_time?.slice(0, 16) || '',
       end_time: appt.end_time?.slice(0, 16) || '',
       reason: appt.reason || '',
+      notes: appt.notes || '',
     });
     setShowEditModal(true);
   };
@@ -221,6 +233,7 @@ export default function AgendaPage() {
         start_time: editForm.start_time,
         end_time: editForm.end_time,
         reason: editForm.reason,
+        notes: editForm.notes,
       });
       toast.success('RDV modifie');
       setShowEditModal(false);
@@ -343,6 +356,16 @@ export default function AgendaPage() {
               <label className="form-label">Motif</label>
               <input className="form-input" value={form.reason} onChange={(e) => setForm(prev => ({ ...prev, reason: e.target.value }))} />
             </div>
+            <div className="form-group">
+              <label className="form-label">Description</label>
+              <textarea className="form-textarea" rows={3} value={form.notes} onChange={(e) => setForm(prev => ({ ...prev, notes: e.target.value }))} placeholder="Details supplementaires sur le rendez-vous..." />
+            </div>
+            {selectedClient && (
+              <div className="form-group">
+                <label className="form-label">Note client (optionnel)</label>
+                <textarea className="form-textarea" rows={2} value={clientNote} onChange={(e) => setClientNote(e.target.value)} placeholder="Ajouter une note sur le client..." />
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '8px' }}>
               <button type="submit" className="btn btn-primary">Creer</button>
               <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button>
@@ -455,6 +478,10 @@ export default function AgendaPage() {
                 <label className="form-label">Motif</label>
                 <input className="form-input" value={editForm.reason} onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })} />
               </div>
+              <div className="form-group">
+                <label className="form-label">Description</label>
+                <textarea className="form-textarea" rows={3} value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Details supplementaires..." />
+              </div>
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => { setShowEditModal(false); setEditForm(null); }}>Annuler</button>
                 <button type="submit" className="btn btn-primary">Enregistrer</button>
@@ -493,8 +520,13 @@ export default function AgendaPage() {
               <div style={{ flex: 1 }}>
                 <strong>{typeLabels[appt.appointment_type]}</strong>
                 {appt.client_name && <span style={{ marginLeft: '8px' }}>{appt.client_name}</span>}
-                {appt.animal_name && <span style={{ color: 'var(--gray-500)', marginLeft: '4px' }}>({appt.animal_name})</span>}
+                {appt.animal_name && (
+                  <span style={{ marginLeft: '4px' }}>
+                    (<Link to={`/animals/${appt.animal_id}`} style={{ color: 'var(--primary)', textDecoration: 'none' }} title="Voir le dossier animal">{appt.animal_name}</Link>)
+                  </span>
+                )}
                 {appt.reason && <span style={{ color: 'var(--gray-500)', marginLeft: '8px' }}>- {appt.reason}</span>}
+                {appt.notes && <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginTop: '2px', whiteSpace: 'pre-wrap' }}>{appt.notes}</div>}
                 {appt.veterinarian_name && <div style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>{appt.veterinarian_name}</div>}
               </div>
               {/* Action buttons */}

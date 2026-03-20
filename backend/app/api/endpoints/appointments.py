@@ -32,6 +32,7 @@ def list_appointments(
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     veterinarian_id: Optional[int] = Query(None),
+    animal_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 100,
@@ -45,6 +46,8 @@ def list_appointments(
         query = query.filter(Appointment.start_time <= datetime.combine(date_to, datetime.max.time()))
     if veterinarian_id:
         query = query.filter(Appointment.veterinarian_id == veterinarian_id)
+    if animal_id:
+        query = query.filter(Appointment.animal_id == animal_id)
     if status:
         query = query.filter(Appointment.status == status)
     appointments = query.order_by(Appointment.start_time).offset(skip).limit(limit).all()

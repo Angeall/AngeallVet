@@ -37,6 +37,11 @@ export default function ClientDetailPage() {
   const [showAlertForm, setShowAlertForm] = useState(false);
   const [alertForm, setAlertForm] = useState({ alert_type: 'bad_payer', message: '', severity: 'warning' });
 
+  // Client notes state
+  const [notes, setNotes] = useState([]);
+  const [showNoteForm, setShowNoteForm] = useState(false);
+  const [noteContent, setNoteContent] = useState('');
+
   // Edit client modal state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({});
@@ -44,16 +49,18 @@ export default function ClientDetailPage() {
 
   const load = async () => {
     try {
-      const [cRes, aRes, iRes, commRes] = await Promise.all([
+      const [cRes, aRes, iRes, commRes, notesRes] = await Promise.all([
         clientsAPI.get(id),
         animalsAPI.list({ client_id: id }),
         billingAPI.listInvoices({ client_id: id }),
         communicationsAPI.list({ client_id: id }),
+        clientsAPI.listNotes(id),
       ]);
       setClient(cRes.data);
       setAnimals(aRes.data);
       setInvoices(iRes.data);
       setComms(commRes.data);
+      setNotes(notesRes.data);
     } catch {
       toast.error('Erreur de chargement');
     }
@@ -158,6 +165,22 @@ export default function ClientDetailPage() {
 
   const removeAlert = async (alertId) => {
     try { await clientsAPI.removeAlert(id, alertId); toast.success('Alerte supprimee'); load(); } catch { toast.error('Erreur'); }
+  };
+
+  const handleNoteSubmit = async (e) => {
+    e.preventDefault();
+    if (!noteContent.trim()) return;
+    try {
+      await clientsAPI.addNote(id, { content: noteContent });
+      toast.success('Note ajoutee');
+      setNoteContent('');
+      setShowNoteForm(false);
+      load();
+    } catch { toast.error('Erreur'); }
+  };
+
+  const deleteNote = async (noteId) => {
+    try { await clientsAPI.deleteNote(id, noteId); toast.success('Note supprimee'); load(); } catch { toast.error('Erreur'); }
   };
 
   const invoiceTotal = invoiceLines.reduce((sum, l) => sum + (parseFloat(l.quantity) || 0) * (parseFloat(l.unit_price) || 0), 0);
@@ -306,9 +329,9 @@ export default function ClientDetailPage() {
       </div>
 
       <div className="tabs">
-        {['animals', 'invoices', 'communications'].map((t) => (
+        {['animals', 'notes', 'invoices', 'communications'].map((t) => (
           <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
-            {t === 'animals' ? 'Animaux' : t === 'invoices' ? 'Factures' : 'Communications'}
+            {t === 'animals' ? 'Animaux' : t === 'notes' ? `Notes (${notes.length})` : t === 'invoices' ? 'Factures' : 'Communications'}
           </button>
         ))}
       </div>
@@ -401,6 +424,51 @@ export default function ClientDetailPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {tab === 'notes' && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">Notes</h3>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowNoteForm(!showNoteForm)}>+ Nouvelle note</button>
+          </div>
+          {showNoteForm && (
+            <div style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+              <form onSubmit={handleNoteSubmit}>
+                <div className="form-group">
+                  <label className="form-label">Contenu de la note *</label>
+                  <textarea className="form-textarea" rows={4} value={noteContent} onChange={(e) => setNoteContent(e.target.value)} placeholder="Ecrire une note sur ce client..." required />
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="submit" className="btn btn-primary">Enregistrer</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => { setShowNoteForm(false); setNoteContent(''); }}>Annuler</button>
+                </div>
+              </form>
+            </div>
+          )}
+          <div className="timeline">
+            {notes.map(n => (
+              <div key={n.id} className="timeline-item">
+                <div className="timeline-dot note" />
+                <div className="card" style={{ marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span className="badge badge-blue">Note</span>
+                      {n.source === 'appointment' && <span className="badge badge-amber">Prise de RDV</span>}
+                      {n.created_by_name && <span style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>{n.created_by_name}</span>}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>{new Date(n.created_at).toLocaleDateString('fr-FR')} {new Date(n.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                      <button className="btn btn-secondary btn-sm" onClick={() => deleteNote(n.id)} style={{ color: 'var(--danger)', padding: '2px 8px' }}>X</button>
+                    </div>
+                  </div>
+                  <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{n.content}</p>
+                </div>
+              </div>
+            ))}
+            {notes.length === 0 && <p style={{ color: 'var(--gray-400)', textAlign: 'center' }}>Aucune note pour ce client</p>}
+          </div>
         </div>
       )}
 

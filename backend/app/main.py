@@ -97,6 +97,7 @@ def _ensure_schema(db_engine):
         ("invoice_lines", "lot_number", "ALTER TABLE invoice_lines ADD COLUMN lot_number VARCHAR(100)"),
         ("medical_record_products", "lot_number", "ALTER TABLE medical_record_products ADD COLUMN lot_number VARCHAR(100)"),
         ("medical_records", "pharmacy_prescription", "ALTER TABLE medical_records ADD COLUMN pharmacy_prescription TEXT"),
+        ("medical_records", "context", "ALTER TABLE medical_records ADD COLUMN context TEXT"),
     ]
     with db_engine.connect() as conn:
         inspector = inspect(db_engine)
@@ -163,6 +164,47 @@ def on_startup():
         db.close()
     except Exception as e:
         logger.warning("Could not seed species: %s", e)
+
+    # 5. Seed initial admin user on first deployment (if no users exist)
+    try:
+        from app.models.user import User, UserRole
+        db = _default_session_factory()
+        if db.query(User).count() == 0:
+            if settings.INITIAL_ADMIN_EMAIL and settings.INITIAL_ADMIN_PASSWORD:
+                from app.core.supabase import get_supabase_admin
+                supabase = get_supabase_admin()
+                try:
+                    auth_response = supabase.auth.admin.create_user({
+                        "email": settings.INITIAL_ADMIN_EMAIL,
+                        "password": settings.INITIAL_ADMIN_PASSWORD,
+                        "email_confirm": True,
+                        "user_metadata": {
+                            "first_name": settings.INITIAL_ADMIN_FIRST_NAME,
+                            "last_name": settings.INITIAL_ADMIN_LAST_NAME,
+                            "role": "admin",
+                        },
+                    })
+                    admin = User(
+                        supabase_uid=auth_response.user.id,
+                        email=settings.INITIAL_ADMIN_EMAIL,
+                        first_name=settings.INITIAL_ADMIN_FIRST_NAME,
+                        last_name=settings.INITIAL_ADMIN_LAST_NAME,
+                        role=UserRole.ADMIN,
+                    )
+                    db.add(admin)
+                    db.commit()
+                    logger.info("✅ Initial admin user created: %s", settings.INITIAL_ADMIN_EMAIL)
+                except Exception as e:
+                    logger.error("Failed to create initial admin in Supabase: %s", e)
+            else:
+                logger.warning(
+                    "⚠ Aucun utilisateur en base et INITIAL_ADMIN_EMAIL / "
+                    "INITIAL_ADMIN_PASSWORD non définis. "
+                    "Personne ne pourra se connecter."
+                )
+        db.close()
+    except Exception as e:
+        logger.warning("Could not seed initial admin: %s", e)
 
     # Warn loudly about missing Supabase configuration
     missing = []
