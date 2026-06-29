@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func as sa_func
 from typing import Optional
 from datetime import date, timedelta
@@ -56,6 +56,27 @@ def _enrich_invoice(inv, db):
     return data
 
 
+def _enrich_invoices(invoices, db):
+    """Batch version of _enrich_invoice: resolves client + vet names in 2 queries
+    for the whole page. Call with lines/payments/veterinarians eager-loaded."""
+    if not invoices:
+        return []
+    datas = [InvoiceResponse.model_validate(inv).model_dump() for inv in invoices]
+    client_ids = {inv.client_id for inv in invoices if inv.client_id}
+    clients = {c.id: c for c in db.query(Client).filter(Client.id.in_(client_ids))} if client_ids else {}
+    user_ids = {iv.user_id for inv in invoices for iv in inv.veterinarians}
+    users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids))} if user_ids else {}
+    for inv, data in zip(invoices, datas):
+        client = clients.get(inv.client_id)
+        if client:
+            data["client_name"] = f"{client.last_name} {client.first_name}"
+        for v in data.get("veterinarians", []):
+            u = users.get(v["user_id"])
+            if u:
+                v["user_name"] = f"{u.first_name} {u.last_name}"
+    return datas
+
+
 # --- Invoices ---
 @router.get("/invoices", response_model=list[InvoiceResponse])
 def list_invoices(
@@ -90,8 +111,18 @@ def list_invoices(
         query = query.filter(
             (Invoice.invoice_number.ilike(f"%{search}%")) | (Invoice.client_id.in_(client_id_list))
         )
-    invoices = query.order_by(Invoice.created_at.desc()).offset(skip).limit(limit).all()
-    return [_enrich_invoice(inv, db) for inv in invoices]
+    invoices = (
+        query.options(
+            selectinload(Invoice.lines),
+            selectinload(Invoice.payments),
+            selectinload(Invoice.veterinarians),
+        )
+        .order_by(Invoice.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return _enrich_invoices(invoices, db)
 
 
 @router.post("/invoices", response_model=InvoiceResponse, status_code=201)
@@ -204,12 +235,18 @@ def list_unpaid(
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
-    return (
+    invoices = (
         db.query(Invoice)
+        .options(
+            selectinload(Invoice.lines),
+            selectinload(Invoice.payments),
+            selectinload(Invoice.veterinarians),
+        )
         .filter(Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE]))
         .order_by(Invoice.due_date)
         .all()
     )
+    return _enrich_invoices(invoices, db)
 
 
 # --- Payments ---
@@ -294,7 +331,13 @@ def list_estimates(
     query = db.query(Estimate)
     if client_id:
         query = query.filter(Estimate.client_id == client_id)
-    return query.order_by(Estimate.created_at.desc()).offset(skip).limit(limit).all()
+    return (
+        query.options(selectinload(Estimate.lines))
+        .order_by(Estimate.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.get("/estimates/{estimate_id}", response_model=EstimateResponse)
