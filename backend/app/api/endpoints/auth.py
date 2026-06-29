@@ -1,44 +1,96 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from gotrue.errors import AuthApiError
 from typing import Optional
 
-from app.core.database import get_central_db
-from app.core.security import get_current_user, require_roles
-from app.core.supabase import get_supabase_admin
+from app.core.database import get_central_db, get_request_db, init_tenant_database
+from app.core.security import get_current_user, require_roles, create_app_token
+from app.core.tenancy import tenant_from_request
+from app.core.pocketbase import (
+    pb_auth_with_password,
+    pb_verify_token,
+    pb_admin_token,
+    pb_create_user,
+    pb_update_user,
+)
 from app.models.user import User, UserRole, RolePermission, Notification, DEFAULT_PERMISSIONS
 from app.models.tenant import Tenant
 from app.schemas.user import (
-    UserCreate, UserUpdate, UserResponse, LoginRequest, TokenResponse,
+    UserCreate, UserUpdate, UserResponse, LoginRequest, TokenResponse, SessionRequest,
     RolePermissionUpdate, RolePermissionResponse, NotificationResponse,
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
+# ─── Helpers ────────────────────────────────────────────────────────
+
+def _link_or_get_user(db: Session, record: dict) -> Optional[User]:
+    """Return the local profile for an authenticated PocketBase record.
+
+    Looks up by PocketBase id first; on first login after a migration it links
+    the profile by email (PocketBase has already verified the credentials).
+    """
+    pb_uid = record.get("id")
+    email = (record.get("email") or "").lower()
+
+    user = db.query(User).filter(User.pb_user_id == pb_uid).first()
+    if user:
+        return user
+    if email:
+        existing = db.query(User).filter(User.email == email).first()
+        if existing:
+            existing.pb_user_id = pb_uid
+            db.commit()
+            db.refresh(existing)
+            return existing
+    return None
+
+
+def _issue_session(db: Session, request: Request, record: dict, pb_token: str) -> TokenResponse:
+    """Build a TokenResponse (app JWT) for an authenticated PocketBase record."""
+    user = _link_or_get_user(db, record)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Profil utilisateur non trouvé. Contactez un administrateur.",
+        )
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Compte désactivé")
+
+    tenant = tenant_from_request(request)
+    app_token = create_app_token(record["id"], tenant.jwt_secret)
+    return TokenResponse(
+        access_token=app_token,
+        refresh_token=pb_token,
+        user=UserResponse.model_validate(user),
+    )
+
+
+# ─── Authentication ─────────────────────────────────────────────────
+
 @router.post("/register", response_model=UserResponse, status_code=201)
-def register(data: UserCreate, db: Session = Depends(get_central_db)):
-    """Register a new user: creates Supabase auth account + local profile."""
+def register(
+    data: UserCreate,
+    request: Request,
+    db: Session = Depends(get_request_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+):
+    """Create a new user: PocketBase auth record + local profile (admin only)."""
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email déjà utilisé")
 
-    supabase = get_supabase_admin()
-    try:
-        auth_response = supabase.auth.admin.create_user({
-            "email": data.email,
-            "password": data.password,
-            "email_confirm": True,
-            "user_metadata": {
-                "first_name": data.first_name,
-                "last_name": data.last_name,
-                "role": data.role.value,
-            },
-        })
-    except AuthApiError as e:
-        raise HTTPException(status_code=400, detail=f"Erreur Supabase: {e.message}")
+    tenant = tenant_from_request(request)
+    admin_token = pb_admin_token(tenant.pocketbase_url, tenant.pb_admin_email, tenant.pb_admin_password)
+    record = pb_create_user(
+        tenant.pocketbase_url,
+        admin_token,
+        email=data.email,
+        password=data.password,
+        name=f"{data.first_name} {data.last_name}".strip(),
+    )
 
     user = User(
-        supabase_uid=auth_response.user.id,
+        pb_user_id=record["id"],
         email=data.email,
         first_name=data.first_name,
         last_name=data.last_name,
@@ -52,59 +104,31 @@ def register(data: UserCreate, db: Session = Depends(get_central_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(data: LoginRequest, db: Session = Depends(get_central_db)):
-    """Authenticate via Supabase and return tokens."""
-    supabase = get_supabase_admin()
-    try:
-        auth_response = supabase.auth.sign_in_with_password({
-            "email": data.email,
-            "password": data.password,
-        })
-    except AuthApiError:
-        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+def login(
+    data: LoginRequest,
+    request: Request,
+    db: Session = Depends(get_request_db),
+):
+    """Authenticate with email/password against the tenant's PocketBase.
 
-    session = auth_response.session
-    if not session:
-        raise HTTPException(status_code=401, detail="Échec de l'authentification")
-
-    user = db.query(User).filter(User.supabase_uid == auth_response.user.id).first()
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Profil utilisateur non trouvé. Contactez un administrateur.",
-        )
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="Compte désactivé")
-
-    return TokenResponse(
-        access_token=session.access_token,
-        refresh_token=session.refresh_token,
-        user=UserResponse.model_validate(user),
-    )
+    Convenience endpoint (e.g. CLI / tests). The SPA logs in against PocketBase
+    directly and then calls ``/auth/session`` to exchange the PB token.
+    """
+    tenant = tenant_from_request(request)
+    pb_token, record = pb_auth_with_password(tenant.pocketbase_url, data.email, data.password)
+    return _issue_session(db, request, record, pb_token)
 
 
-@router.post("/refresh", response_model=TokenResponse)
-def refresh_token(refresh_token: str, db: Session = Depends(get_central_db)):
-    """Refresh tokens via Supabase."""
-    supabase = get_supabase_admin()
-    try:
-        auth_response = supabase.auth.refresh_session(refresh_token)
-    except AuthApiError:
-        raise HTTPException(status_code=401, detail="Token de rafraîchissement invalide")
-
-    session = auth_response.session
-    if not session:
-        raise HTTPException(status_code=401, detail="Échec du rafraîchissement")
-
-    user = db.query(User).filter(User.supabase_uid == auth_response.user.id).first()
-    if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="Utilisateur non trouvé")
-
-    return TokenResponse(
-        access_token=session.access_token,
-        refresh_token=session.refresh_token,
-        user=UserResponse.model_validate(user),
-    )
+@router.post("/session", response_model=TokenResponse)
+def create_session(
+    data: SessionRequest,
+    request: Request,
+    db: Session = Depends(get_request_db),
+):
+    """Exchange a PocketBase token (from browser-side login) for an app JWT."""
+    tenant = tenant_from_request(request)
+    fresh_token, record = pb_verify_token(tenant.pocketbase_url, data.pb_token)
+    return _issue_session(db, request, record, fresh_token)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -115,7 +139,7 @@ def get_me(current_user: User = Depends(get_current_user)):
 @router.put("/me", response_model=UserResponse)
 def update_me(
     data: UserUpdate,
-    db: Session = Depends(get_central_db),
+    db: Session = Depends(get_request_db),
     current_user: User = Depends(get_current_user),
 ):
     """Allow any authenticated user to update their own profile (limited fields)."""
@@ -133,7 +157,7 @@ def update_me(
 
 @router.get("/users", response_model=list[UserResponse])
 def list_users(
-    db: Session = Depends(get_central_db),
+    db: Session = Depends(get_request_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     return db.query(User).all()
@@ -141,7 +165,7 @@ def list_users(
 
 @router.get("/staff", response_model=list[UserResponse])
 def list_staff(
-    db: Session = Depends(get_central_db),
+    db: Session = Depends(get_request_db),
     current_user: User = Depends(get_current_user),
 ):
     """List active staff (admins, vets, assistants). Available to all authenticated
@@ -161,7 +185,8 @@ def list_staff(
 def update_user(
     user_id: int,
     data: UserUpdate,
-    db: Session = Depends(get_central_db),
+    request: Request,
+    db: Session = Depends(get_request_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     user = db.query(User).filter(User.id == user_id).first()
@@ -170,26 +195,15 @@ def update_user(
 
     update_data = data.model_dump(exclude_unset=True)
 
-    # Build Supabase update payload for synced fields
-    sb_update: dict = {}
+    # PocketBase only owns the login identity (email). Names and roles live in
+    # the application DB, so we only sync PocketBase when the email changes.
     if "email" in update_data and update_data["email"] != user.email:
-        sb_update["email"] = update_data["email"]
-    meta_sync = {}
-    if "first_name" in update_data:
-        meta_sync["first_name"] = update_data["first_name"]
-    if "last_name" in update_data:
-        meta_sync["last_name"] = update_data["last_name"]
-    if "role" in update_data:
-        meta_sync["role"] = update_data["role"].value if hasattr(update_data["role"], "value") else update_data["role"]
-    if meta_sync:
-        sb_update["user_metadata"] = meta_sync
-
-    if sb_update:
-        supabase = get_supabase_admin()
-        try:
-            supabase.auth.admin.update_user_by_id(user.supabase_uid, sb_update)
-        except AuthApiError as e:
-            raise HTTPException(status_code=400, detail=f"Erreur Supabase: {e.message}")
+        tenant = tenant_from_request(request)
+        admin_token = pb_admin_token(tenant.pocketbase_url, tenant.pb_admin_email, tenant.pb_admin_password)
+        pb_update_user(
+            tenant.pocketbase_url, admin_token, user.pb_user_id,
+            {"email": update_data["email"]},
+        )
 
     for field, value in update_data.items():
         setattr(user, field, value)
@@ -203,7 +217,7 @@ def update_user(
 
 @router.get("/permissions", response_model=list[RolePermissionResponse])
 def list_permissions(
-    db: Session = Depends(get_central_db),
+    db: Session = Depends(get_request_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get permissions for all roles. Returns DB-stored overrides or defaults."""
@@ -222,7 +236,7 @@ def list_permissions(
 
 @router.get("/permissions/me")
 def my_permissions(
-    db: Session = Depends(get_central_db),
+    db: Session = Depends(get_request_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get current user's permissions."""
@@ -239,7 +253,7 @@ def my_permissions(
 def update_permissions(
     role: str,
     data: RolePermissionUpdate,
-    db: Session = Depends(get_central_db),
+    db: Session = Depends(get_request_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     """Update permissions for a role (admin only)."""
@@ -266,7 +280,7 @@ def update_permissions(
 def list_notifications(
     unread_only: bool = Query(False),
     limit: int = Query(20),
-    db: Session = Depends(get_central_db),
+    db: Session = Depends(get_request_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
@@ -277,7 +291,7 @@ def list_notifications(
 
 @router.get("/notifications/unread-count")
 def unread_count(
-    db: Session = Depends(get_central_db),
+    db: Session = Depends(get_request_db),
     current_user: User = Depends(get_current_user),
 ):
     count = db.query(Notification).filter(
@@ -290,7 +304,7 @@ def unread_count(
 @router.patch("/notifications/{notification_id}/read")
 def mark_read(
     notification_id: int,
-    db: Session = Depends(get_central_db),
+    db: Session = Depends(get_request_db),
     current_user: User = Depends(get_current_user),
 ):
     notif = db.query(Notification).filter(
@@ -306,7 +320,7 @@ def mark_read(
 
 @router.patch("/notifications/read-all")
 def mark_all_read(
-    db: Session = Depends(get_central_db),
+    db: Session = Depends(get_request_db),
     current_user: User = Depends(get_current_user),
 ):
     db.query(Notification).filter(
@@ -318,11 +332,8 @@ def mark_all_read(
 
 
 # ─── Tenant Management ────────────────────────────────────────────
-# Tenants live in the CENTRAL database (not tenant DBs).
+# Tenants live in the CENTRAL registry database (not tenant DBs).
 # We use get_central_db here explicitly.
-
-from app.core.database import init_tenant_database
-
 
 @router.get("/tenants")
 def list_tenants(
@@ -338,18 +349,31 @@ def create_tenant(
     name: str,
     slug: str,
     database_url: str,
+    subdomain: Optional[str] = None,
+    pocketbase_url: Optional[str] = None,
+    pb_admin_email: Optional[str] = None,
+    pb_admin_password: Optional[str] = None,
     db: Session = Depends(get_central_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
-    """Create a new tenant with its own database.
+    """Create a new tenant with its own database + PocketBase instance.
 
     The database_url should point to an existing (empty) PostgreSQL database.
-    All tables will be automatically created in it.
+    All tables will be automatically created in it. ``pocketbase_url`` is the
+    internal URL of the tenant's PocketBase instance.
     """
     if db.query(Tenant).filter(Tenant.slug == slug).first():
         raise HTTPException(status_code=400, detail="Ce slug est deja utilise")
 
-    tenant = Tenant(name=name, slug=slug, database_url=database_url)
+    tenant = Tenant(
+        name=name,
+        slug=slug,
+        database_url=database_url,
+        subdomain=subdomain or slug,
+        pocketbase_url=pocketbase_url,
+        pb_admin_email=pb_admin_email,
+        pb_admin_password=pb_admin_password,
+    )
     db.add(tenant)
     db.commit()
     db.refresh(tenant)
@@ -373,6 +397,8 @@ def update_tenant(
     tenant_id: int,
     name: Optional[str] = None,
     is_active: Optional[bool] = None,
+    subdomain: Optional[str] = None,
+    pocketbase_url: Optional[str] = None,
     db: Session = Depends(get_central_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
@@ -384,6 +410,10 @@ def update_tenant(
         tenant.name = name
     if is_active is not None:
         tenant.is_active = is_active
+    if subdomain is not None:
+        tenant.subdomain = subdomain
+    if pocketbase_url is not None:
+        tenant.pocketbase_url = pocketbase_url
     db.commit()
     db.refresh(tenant)
     return tenant
@@ -396,7 +426,7 @@ def assign_user_to_tenant(
     db: Session = Depends(get_central_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
-    """Assign a user to a tenant. Also syncs to Supabase app_metadata."""
+    """Assign a user to a tenant (registry-level bookkeeping)."""
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant non trouve")
@@ -407,16 +437,5 @@ def assign_user_to_tenant(
 
     user.tenant_id = tenant_id
     db.commit()
-
-    # Sync tenant_id to Supabase app_metadata
-    try:
-        supabase = get_supabase_admin()
-        supabase.auth.admin.update_user_by_id(
-            user.supabase_uid,
-            {"app_metadata": {"tenant_id": tenant_id}},
-        )
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("Failed to sync tenant_id to Supabase: %s", e)
 
     return {"ok": True, "user_id": user_id, "tenant_id": tenant_id}

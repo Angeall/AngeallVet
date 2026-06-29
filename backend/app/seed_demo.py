@@ -5,8 +5,9 @@ Run: python -m app.seed_demo
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
+from app.core.config import settings
 from app.core.database import _default_session_factory as SessionLocal, _default_engine as engine, Base
-from app.core.supabase import get_supabase_admin
+from app.core.pocketbase import pb_admin_token, pb_create_user
 from app.models.user import User, UserRole
 from app.models.client import Client
 from app.models.animal import Animal, AnimalAlert, WeightRecord, Species, Sex
@@ -30,8 +31,12 @@ def seed():
 
         print("Seeding demo data...")
 
-        # ==================== USERS (via Supabase Auth) ====================
-        supabase = get_supabase_admin()
+        # ==================== USERS (via PocketBase Auth) ====================
+        admin_token = pb_admin_token(
+            settings.POCKETBASE_URL,
+            settings.POCKETBASE_ADMIN_EMAIL,
+            settings.POCKETBASE_ADMIN_PASSWORD,
+        )
 
         demo_users = [
             {"email": "admin@angeallvet.fr", "password": "admin123", "first_name": "Sophie", "last_name": "Martin", "role": UserRole.ADMIN, "phone": "0601020304"},
@@ -43,18 +48,15 @@ def seed():
 
         user_objects = []
         for ud in demo_users:
-            auth_response = supabase.auth.admin.create_user({
-                "email": ud["email"],
-                "password": ud["password"],
-                "email_confirm": True,
-                "user_metadata": {
-                    "first_name": ud["first_name"],
-                    "last_name": ud["last_name"],
-                    "role": ud["role"].value,
-                },
-            })
+            record = pb_create_user(
+                settings.POCKETBASE_URL,
+                admin_token,
+                email=ud["email"],
+                password=ud["password"],
+                name=f"{ud['first_name']} {ud['last_name']}",
+            )
             user = User(
-                supabase_uid=auth_response.user.id,
+                pb_user_id=record["id"],
                 email=ud["email"],
                 first_name=ud["first_name"],
                 last_name=ud["last_name"],

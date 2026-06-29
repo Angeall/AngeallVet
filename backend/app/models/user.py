@@ -75,7 +75,8 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    supabase_uid = Column(String(255), unique=True, nullable=False, index=True)
+    # PocketBase auth record id (replaces the former Supabase uid)
+    pb_user_id = Column(String(255), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)

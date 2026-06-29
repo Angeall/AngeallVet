@@ -1,0 +1,39 @@
+# AngeallVet reverse proxy.
+#
+# Every request keeps its original Host header (Caddy preserves it and adds
+# X-Forwarded-Host), so the backend resolves the tenant from the sub-domain
+# (e.g. clinique-martin.angeallvet.localhost -> tenant "clinique-martin").
+#
+# Routing per host:
+#   /pb/*      -> the tenant's PocketBase (browser talks to PB directly, same-origin)
+#   /api/*     -> FastAPI backend
+#   /uploads/* -> FastAPI backend (static files)
+#   everything -> the React frontend
+#
+# Dev uses plain HTTP on :80 against *.angeallvet.localhost (browsers resolve
+# *.localhost to 127.0.0.1). For production, replace ":80" with your domain
+# (e.g. "*.angeallvet.fr") and remove "auto_https off" to get automatic TLS.
+
+{
+	auto_https off
+	admin off
+}
+
+:80 {
+	# PocketBase, same-origin under /pb (prefix stripped before proxying).
+	handle_path /pb/* {
+		reverse_proxy pocketbase:8090
+	}
+
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle /uploads/* {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

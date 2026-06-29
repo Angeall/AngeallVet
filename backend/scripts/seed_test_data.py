@@ -229,7 +229,7 @@ def _do_seed(db):
         if not vets:
             vets = staff[:1]  # fallback: use first user as vet
     else:
-        print("No users found. Skipping user creation (users are managed by Supabase auth).")
+        print("No users found. Skipping user creation (users are managed by PocketBase auth).")
         print("Please create at least one user via the app first, then re-run this script.")
         return
 

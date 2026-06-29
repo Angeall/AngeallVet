@@ -13,14 +13,36 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     CORS_ORIGINS: str = '["http://localhost:3000"]'
 
-    # Database
+    # Database (central / registry database — holds the `tenants` table and,
+    # for the default tenant, all application data)
     DATABASE_URL: str = "postgresql://angeallvet:angeallvet_dev@localhost:5432/angeallvet"
 
-    # Supabase Auth
-    SUPABASE_URL: str = ""
-    SUPABASE_ANON_KEY: str = ""
-    SUPABASE_SERVICE_ROLE_KEY: str = ""
-    SUPABASE_JWT_SECRET: str = ""
+    # --- Multi-tenant resolution ---------------------------------------
+    # Requests are routed to a tenant by the sub-domain of BASE_DOMAIN
+    # (e.g. clinique-martin.angeallvet.fr -> tenant "clinique-martin").
+    # When no sub-domain matches, the DEFAULT tenant below is used
+    # (single-clinic deployment / local dev / tests).
+    BASE_DOMAIN: str = "angeallvet.localhost"
+    DEFAULT_TENANT_SLUG: str = "default"
+
+    # --- PocketBase (authentication provider) --------------------------
+    # Each tenant runs its OWN PocketBase instance (tenant-local auth).
+    # These values configure the DEFAULT tenant; additional tenants store
+    # their own PocketBase URL + superuser credentials in the central
+    # `tenants` table. The backend reaches PocketBase over the internal
+    # Docker network (service name), never the public sub-domain.
+    POCKETBASE_URL: str = "http://127.0.0.1:8090"
+    POCKETBASE_ADMIN_EMAIL: str = ""
+    POCKETBASE_ADMIN_PASSWORD: str = ""
+    POCKETBASE_USERS_COLLECTION: str = "users"
+
+    # --- Application JWT ------------------------------------------------
+    # After verifying a PocketBase token, the backend issues its OWN JWT
+    # signed with a PER-TENANT secret (derived from APP_SECRET_KEY + the
+    # tenant slug, or overridden by the tenant's `auth_jwt_secret` column),
+    # so a token minted for one tenant is rejected by another.
+    AUTH_JWT_ALGORITHM: str = "HS256"
+    AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: int = 720  # 12h
 
     # Email
     SMTP_HOST: str = ""

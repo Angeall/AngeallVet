@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../services/supabase';
-import { authAPI } from '../services/api';
+import { pb, USERS_COLLECTION } from '../services/pocketbase';
+import { authAPI, setAppToken } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -8,79 +8,61 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Exchange the current PocketBase session for an application JWT + profile.
+  const establishSession = async () => {
+    const { data } = await authAPI.session(pb.authStore.token);
+    setAppToken(data.access_token);
+    setUser(data.user);
+    return data.user;
+  };
+
   useEffect(() => {
-    // Check for existing Supabase session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        // Fetch the local user profile from our backend
-        authAPI.me()
-          .then((res) => setUser(res.data))
-          .catch((err) => {
-            console.warn('Session exists but /auth/me failed:', err.response?.data?.detail || err.message);
-            // Only sign out if the token is truly invalid (expired, malformed).
-            // A missing local profile (auto-provisioning failure) should not
-            // destroy the Supabase session – the user can retry via login.
-            if (err.response?.status === 401) {
-              supabase.auth.signOut();
-            }
-          })
-          .finally(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
-    });
-
-    // Listen for auth state changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_OUT') {
-          setUser(null);
-        } else if (event === 'TOKEN_REFRESHED' && session) {
-          // Session refreshed automatically by Supabase
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
+    let active = true;
+    // Restore the session on load if PocketBase still has a valid token.
+    if (pb.authStore.isValid) {
+      establishSession()
+        .catch((err) => {
+          console.warn(
+            'Session PocketBase non rétablie:',
+            err?.response?.data?.detail || err.message
+          );
+          setAppToken(null);
+          pb.authStore.clear();
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    } else {
+      setLoading(false);
+    }
+    return () => {
+      active = false;
+    };
   }, []);
 
   const login = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    // Fetch local user profile from our backend.
-    // The backend auto-provisions the profile on first login, which may
-    // need a moment, so we retry once after a short delay if it fails.
-    let profileRes;
+    // 1. Authenticate directly against the tenant's PocketBase instance.
     try {
-      profileRes = await authAPI.me();
-    } catch (firstErr) {
-      // Wait briefly then retry – gives auto-provisioning time to complete
-      await new Promise((r) => setTimeout(r, 1000));
-      try {
-        profileRes = await authAPI.me();
-      } catch (secondErr) {
-        // Don't destroy the Supabase session – let the user retry or
-        // see a meaningful error instead of a silent logout loop.
-        throw new Error(
-          secondErr.response?.data?.detail ||
-            'Impossible de charger votre profil. Vérifiez la configuration du serveur.'
-        );
-      }
+      await pb.collection(USERS_COLLECTION).authWithPassword(email, password);
+    } catch (err) {
+      throw new Error('Email ou mot de passe incorrect');
     }
-
-    setUser(profileRes.data);
-    return profileRes.data;
+    // 2. Exchange the PocketBase token for an application JWT + load the profile.
+    try {
+      return await establishSession();
+    } catch (err) {
+      pb.authStore.clear();
+      setAppToken(null);
+      throw new Error(
+        err?.response?.data?.detail ||
+          'Connexion impossible. Vérifiez la configuration du serveur.'
+      );
+    }
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    pb.authStore.clear();
+    setAppToken(null);
     setUser(null);
   };
 

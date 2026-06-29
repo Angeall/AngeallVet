@@ -13,7 +13,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    """Create user: password is managed by Supabase, we just need profile info."""
+    """Create user: password is managed by PocketBase, we just store the profile."""
     password: str
 
 
@@ -29,7 +29,7 @@ class UserUpdate(BaseModel):
 
 class UserResponse(UserBase):
     id: int
-    supabase_uid: str
+    pb_user_id: str
     is_active: bool
     sidenav_color: Optional[str] = None
     created_at: datetime
@@ -41,6 +41,11 @@ class UserResponse(UserBase):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class SessionRequest(BaseModel):
+    """Exchange a PocketBase token (from browser-side login) for an app JWT."""
+    pb_token: str
 
 
 class TokenResponse(BaseModel):

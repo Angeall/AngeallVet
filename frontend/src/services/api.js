@@ -1,39 +1,66 @@
 import axios from 'axios';
-import { supabase } from './supabase';
+import { pb } from './pocketbase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+
+// --- Application JWT store -------------------------------------------------
+// The backend mints a per-tenant application JWT after verifying the PocketBase
+// token (see /auth/session). That JWT is what we send to the API.
+const APP_TOKEN_KEY = 'app_token';
+let appToken = localStorage.getItem(APP_TOKEN_KEY);
+
+export function setAppToken(token) {
+  appToken = token || null;
+  if (token) localStorage.setItem(APP_TOKEN_KEY, token);
+  else localStorage.removeItem(APP_TOKEN_KEY);
+}
+
+export function getAppToken() {
+  return appToken;
+}
 
 const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach Supabase access token to every request
-api.interceptors.request.use(async (config) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.access_token) {
-    config.headers.Authorization = `Bearer ${session.access_token}`;
-  }
+// Attach the application JWT to every request.
+api.interceptors.request.use((config) => {
+  if (appToken) config.headers.Authorization = `Bearer ${appToken}`;
   return config;
 });
 
-// Handle 401 – sign out only for non-auth endpoints to avoid
-// destroying a valid Supabase session during the login flow.
+// On 401 for a non-auth endpoint, try once to re-exchange the (still valid)
+// PocketBase session for a fresh application JWT; otherwise sign out.
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const url = error.config?.url || '';
+    const config = error.config || {};
+    const url = config.url || '';
     const isAuthEndpoint = url.includes('/auth/');
-    if (error.response?.status === 401 && !isAuthEndpoint) {
-      await supabase.auth.signOut();
+    if (error.response?.status === 401 && !isAuthEndpoint && !config._retry) {
+      if (pb.authStore.isValid) {
+        try {
+          const { data } = await api.post('/auth/session', { pb_token: pb.authStore.token });
+          setAppToken(data.access_token);
+          config._retry = true;
+          config.headers = { ...config.headers, Authorization: `Bearer ${data.access_token}` };
+          return api(config);
+        } catch (_) {
+          // fall through to sign-out
+        }
+      }
+      setAppToken(null);
+      pb.authStore.clear();
       window.location.href = '/login';
     }
     return Promise.reject(error);
   }
 );
 
-// Auth (backend profile endpoints - Supabase handles actual auth)
+// Auth (PocketBase handles credentials; backend issues the application JWT)
 export const authAPI = {
+  session: (pbToken) => api.post('/auth/session', { pb_token: pbToken }),
   me: () => api.get('/auth/me'),
   updateMe: (data) => api.put('/auth/me', data),
   listUsers: () => api.get('/auth/users'),

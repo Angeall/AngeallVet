@@ -17,6 +17,31 @@ from app.api.endpoints import (
 )
 from app.api.endpoints import settings as settings_endpoints
 
+
+class TenantMiddleware:
+    """Pure-ASGI middleware: resolve the tenant from the Host sub-domain.
+
+    The resolved :class:`~app.core.tenancy.TenantContext` is stashed on the ASGI
+    ``scope`` so the DB/auth dependencies can route to the right tenant database,
+    PocketBase instance and JWT secret. Implemented as pure ASGI (not
+    ``BaseHTTPMiddleware``) so the value reliably reaches thread-pool endpoints.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            return await self.app(scope, receive, send)
+        from app.core.tenancy import resolve_tenant_context, resolve_tenant_by_slug
+
+        headers = {k.decode().lower(): v.decode() for k, v in (scope.get("headers") or [])}
+        slug = headers.get("x-tenant-slug")
+        host = headers.get("x-forwarded-host") or headers.get("host") or ""
+        scope["tenant_ctx"] = resolve_tenant_by_slug(slug) if slug else resolve_tenant_context(host)
+        return await self.app(scope, receive, send)
+
+
 app = FastAPI(
     title=settings.APP_NAME,
     description="Système de gestion pour cliniques vétérinaires (PMS)",
@@ -32,6 +57,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Resolve the tenant (sub-domain) for every request before routing.
+app.add_middleware(TenantMiddleware)
 
 
 @app.exception_handler(Exception)
@@ -98,6 +126,18 @@ def _ensure_schema(db_engine):
         ("medical_record_products", "lot_number", "ALTER TABLE medical_record_products ADD COLUMN lot_number VARCHAR(100)"),
         ("medical_records", "pharmacy_prescription", "ALTER TABLE medical_records ADD COLUMN pharmacy_prescription TEXT"),
         ("medical_records", "context", "ALTER TABLE medical_records ADD COLUMN context TEXT"),
+        # PocketBase auth / sub-domain tenancy (central registry)
+        ("tenants", "subdomain", "ALTER TABLE tenants ADD COLUMN subdomain VARCHAR(100)"),
+        ("tenants", "pocketbase_url", "ALTER TABLE tenants ADD COLUMN pocketbase_url VARCHAR(500)"),
+        ("tenants", "pb_admin_email", "ALTER TABLE tenants ADD COLUMN pb_admin_email VARCHAR(255)"),
+        ("tenants", "pb_admin_password", "ALTER TABLE tenants ADD COLUMN pb_admin_password VARCHAR(255)"),
+        ("tenants", "auth_jwt_secret", "ALTER TABLE tenants ADD COLUMN auth_jwt_secret VARCHAR(255)"),
+    ]
+
+    # Column renames that create_all won't perform on pre-existing tables.
+    # Each entry: (table, old_column, new_column).
+    _pending_renames = [
+        ("users", "supabase_uid", "pb_user_id"),
     ]
     with db_engine.connect() as conn:
         inspector = inspect(db_engine)
@@ -108,6 +148,13 @@ def _ensure_schema(db_engine):
             if column not in existing:
                 conn.execute(text(ddl))
                 logger.info("Added missing column %s.%s", table, column)
+        for table, old, new in _pending_renames:
+            if table not in inspector.get_table_names():
+                continue
+            cols = [c["name"] for c in inspector.get_columns(table)]
+            if old in cols and new not in cols:
+                conn.execute(text(f"ALTER TABLE {table} RENAME COLUMN {old} TO {new}"))
+                logger.info("Renamed column %s.%s -> %s", table, old, new)
         conn.commit()
 
 
@@ -171,21 +218,22 @@ def on_startup():
         db = _default_session_factory()
         if db.query(User).count() == 0:
             if settings.INITIAL_ADMIN_EMAIL and settings.INITIAL_ADMIN_PASSWORD:
-                from app.core.supabase import get_supabase_admin
-                supabase = get_supabase_admin()
+                from app.core.pocketbase import pb_admin_token, pb_create_user
                 try:
-                    auth_response = supabase.auth.admin.create_user({
-                        "email": settings.INITIAL_ADMIN_EMAIL,
-                        "password": settings.INITIAL_ADMIN_PASSWORD,
-                        "email_confirm": True,
-                        "user_metadata": {
-                            "first_name": settings.INITIAL_ADMIN_FIRST_NAME,
-                            "last_name": settings.INITIAL_ADMIN_LAST_NAME,
-                            "role": "admin",
-                        },
-                    })
+                    admin_token = pb_admin_token(
+                        settings.POCKETBASE_URL,
+                        settings.POCKETBASE_ADMIN_EMAIL,
+                        settings.POCKETBASE_ADMIN_PASSWORD,
+                    )
+                    record = pb_create_user(
+                        settings.POCKETBASE_URL,
+                        admin_token,
+                        email=settings.INITIAL_ADMIN_EMAIL,
+                        password=settings.INITIAL_ADMIN_PASSWORD,
+                        name=f"{settings.INITIAL_ADMIN_FIRST_NAME} {settings.INITIAL_ADMIN_LAST_NAME}".strip(),
+                    )
                     admin = User(
-                        supabase_uid=auth_response.user.id,
+                        pb_user_id=record["id"],
                         email=settings.INITIAL_ADMIN_EMAIL,
                         first_name=settings.INITIAL_ADMIN_FIRST_NAME,
                         last_name=settings.INITIAL_ADMIN_LAST_NAME,
@@ -193,9 +241,9 @@ def on_startup():
                     )
                     db.add(admin)
                     db.commit()
-                    logger.info("✅ Initial admin user created: %s", settings.INITIAL_ADMIN_EMAIL)
+                    logger.info("✅ Initial admin user created in PocketBase: %s", settings.INITIAL_ADMIN_EMAIL)
                 except Exception as e:
-                    logger.error("Failed to create initial admin in Supabase: %s", e)
+                    logger.error("Failed to create initial admin in PocketBase: %s", e)
             else:
                 logger.warning(
                     "⚠ Aucun utilisateur en base et INITIAL_ADMIN_EMAIL / "
@@ -206,18 +254,18 @@ def on_startup():
     except Exception as e:
         logger.warning("Could not seed initial admin: %s", e)
 
-    # Warn loudly about missing Supabase configuration
+    # Warn loudly about missing PocketBase configuration (default tenant)
     missing = []
-    if not settings.SUPABASE_URL:
-        missing.append("SUPABASE_URL")
-    if not settings.SUPABASE_JWT_SECRET:
-        missing.append("SUPABASE_JWT_SECRET")
-    if not settings.SUPABASE_SERVICE_ROLE_KEY:
-        missing.append("SUPABASE_SERVICE_ROLE_KEY")
+    if not settings.POCKETBASE_URL:
+        missing.append("POCKETBASE_URL")
+    if not settings.POCKETBASE_ADMIN_EMAIL:
+        missing.append("POCKETBASE_ADMIN_EMAIL")
+    if not settings.POCKETBASE_ADMIN_PASSWORD:
+        missing.append("POCKETBASE_ADMIN_PASSWORD")
     if missing:
         logger.warning(
-            "⚠ CONFIGURATION INCOMPLÈTE – Variables manquantes : %s. "
-            "L'authentification ne fonctionnera PAS.",
+            "⚠ CONFIGURATION INCOMPLÈTE – Variables PocketBase manquantes : %s. "
+            "La création d'utilisateurs et l'authentification risquent de ne pas fonctionner.",
             ", ".join(missing),
         )
 

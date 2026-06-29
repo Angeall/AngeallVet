@@ -1,12 +1,12 @@
 """
 Tests for auth endpoints.
 
-Note: register and login hit Supabase APIs directly, so we test them
-with mocked Supabase calls. The /me and /users endpoints use JWT
-verification which is fully testable with our test JWT secret.
+register / login / session talk to PocketBase over HTTP, so we patch the
+PocketBase helper functions. The /me and /users endpoints exercise the real
+application-JWT verification (signed with the default tenant secret).
 """
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from app.models.user import UserRole
 
@@ -15,12 +15,12 @@ def test_get_me(client, auth_headers):
     response = client.get("/api/v1/auth/me", headers=auth_headers)
     assert response.status_code == 200
     assert response.json()["email"] == "admin@test.com"
-    assert response.json()["supabase_uid"] is not None
+    assert response.json()["pb_user_id"] is not None
 
 
 def test_get_me_unauthenticated(client):
     response = client.get("/api/v1/auth/me")
-    assert response.status_code == 403  # No credentials
+    assert response.status_code == 401  # No credentials (FastAPI HTTPBearer)
 
 
 def test_get_me_invalid_token(client):
@@ -59,69 +59,106 @@ def test_update_user_non_admin(client, vet_headers, admin_user):
     assert response.status_code == 403
 
 
-def test_register_with_mocked_supabase(client, db):
-    """Test register endpoint with mocked Supabase admin client."""
+def test_register_with_mocked_pocketbase(client, auth_headers):
+    """Register (admin only) creates a PocketBase record + local profile."""
     fake_uid = str(uuid.uuid4())
-    mock_user = MagicMock()
-    mock_user.id = fake_uid
 
-    mock_response = MagicMock()
-    mock_response.user = mock_user
-
-    mock_supabase = MagicMock()
-    mock_supabase.auth.admin.create_user.return_value = mock_response
-
-    with patch("app.api.endpoints.auth.get_supabase_admin", return_value=mock_supabase):
-        response = client.post("/api/v1/auth/register", json={
-            "email": "new@test.com",
-            "password": "password123",
-            "first_name": "New",
-            "last_name": "User",
-            "role": "assistant",
-        })
+    with patch("app.api.endpoints.auth.pb_admin_token", return_value="admin-token"), patch(
+        "app.api.endpoints.auth.pb_create_user",
+        return_value={"id": fake_uid, "email": "new@test.com"},
+    ):
+        response = client.post(
+            "/api/v1/auth/register",
+            headers=auth_headers,
+            json={
+                "email": "new@test.com",
+                "password": "password123",
+                "first_name": "New",
+                "last_name": "User",
+                "role": "assistant",
+            },
+        )
 
     assert response.status_code == 201
     data = response.json()
     assert data["email"] == "new@test.com"
     assert data["role"] == "assistant"
-    assert data["supabase_uid"] == fake_uid
+    assert data["pb_user_id"] == fake_uid
 
 
-def test_register_duplicate_email(client, admin_user):
-    """Test that registering with an existing email fails before hitting Supabase."""
-    response = client.post("/api/v1/auth/register", json={
-        "email": "admin@test.com",
-        "password": "password123",
-        "first_name": "Dup",
-        "last_name": "User",
-    })
+def test_register_requires_admin(client, vet_headers):
+    """A non-admin cannot create users."""
+    response = client.post(
+        "/api/v1/auth/register",
+        headers=vet_headers,
+        json={"email": "x@test.com", "password": "password123", "first_name": "X", "last_name": "Y"},
+    )
+    assert response.status_code == 403
+
+
+def test_register_duplicate_email(client, auth_headers, admin_user):
+    """Registering an existing email fails before hitting PocketBase."""
+    response = client.post(
+        "/api/v1/auth/register",
+        headers=auth_headers,
+        json={
+            "email": "admin@test.com",
+            "password": "password123",
+            "first_name": "Dup",
+            "last_name": "User",
+        },
+    )
     assert response.status_code == 400
 
 
-def test_login_with_mocked_supabase(client, admin_user):
-    """Test login endpoint with mocked Supabase."""
-    mock_session = MagicMock()
-    mock_session.access_token = "fake-access-token"
-    mock_session.refresh_token = "fake-refresh-token"
+def test_login_with_mocked_pocketbase(client, admin_user):
+    """Login exchanges PocketBase credentials for an application JWT."""
+    pb_record = {"id": admin_user.pb_user_id, "email": "admin@test.com"}
 
-    mock_supabase_user = MagicMock()
-    mock_supabase_user.id = admin_user.supabase_uid
-
-    mock_response = MagicMock()
-    mock_response.session = mock_session
-    mock_response.user = mock_supabase_user
-
-    mock_supabase = MagicMock()
-    mock_supabase.auth.sign_in_with_password.return_value = mock_response
-
-    with patch("app.api.endpoints.auth.get_supabase_admin", return_value=mock_supabase):
-        response = client.post("/api/v1/auth/login", json={
-            "email": "admin@test.com",
-            "password": "admin123",
-        })
+    with patch(
+        "app.api.endpoints.auth.pb_auth_with_password",
+        return_value=("pb-token", pb_record),
+    ):
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "admin@test.com", "password": "admin123"},
+        )
 
     assert response.status_code == 200
     data = response.json()
-    assert data["access_token"] == "fake-access-token"
-    assert data["refresh_token"] == "fake-refresh-token"
+    assert data["access_token"]  # application JWT
+    assert data["refresh_token"] == "pb-token"
     assert data["user"]["email"] == "admin@test.com"
+
+
+def test_session_exchange_with_mocked_pocketbase(client, admin_user):
+    """POST /auth/session verifies a PB token and returns an application JWT
+    that is then accepted by a protected endpoint."""
+    pb_record = {"id": admin_user.pb_user_id, "email": "admin@test.com"}
+
+    with patch(
+        "app.api.endpoints.auth.pb_verify_token",
+        return_value=("fresh-pb-token", pb_record),
+    ):
+        response = client.post("/api/v1/auth/session", json={"pb_token": "browser-pb-token"})
+
+    assert response.status_code == 200
+    app_token = response.json()["access_token"]
+    assert app_token
+
+    # The minted application JWT must authenticate against a protected route.
+    me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {app_token}"})
+    assert me.status_code == 200
+    assert me.json()["email"] == "admin@test.com"
+
+
+def test_session_invalid_pb_token(client):
+    """An invalid PocketBase token yields 401 from the exchange endpoint."""
+    from fastapi import HTTPException
+
+    with patch(
+        "app.api.endpoints.auth.pb_verify_token",
+        side_effect=HTTPException(status_code=401, detail="Jeton PocketBase invalide ou expiré"),
+    ):
+        response = client.post("/api/v1/auth/session", json={"pb_token": "bad"})
+    assert response.status_code == 401

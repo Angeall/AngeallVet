@@ -17,7 +17,7 @@ def test_list_staff_excludes_inactive(client, auth_headers, db):
     """Inactive users should not appear in staff list."""
     uid = str(uuid.uuid4())
     inactive = User(
-        supabase_uid=uid, email="inactive@test.com",
+        pb_user_id=uid, email="inactive@test.com",
         first_name="Gone", last_name="User",
         role=UserRole.VETERINARIAN, is_active=False,
     )
@@ -38,7 +38,7 @@ def test_list_staff_excludes_accountant_and_guest(client, auth_headers, db):
     ]:
         uid = str(uuid.uuid4())
         user = User(
-            supabase_uid=uid, email=email,
+            pb_user_id=uid, email=email,
             first_name="Test", last_name=role.value,
             role=role, is_active=True,
         )
@@ -56,7 +56,7 @@ def test_list_staff_includes_assistant(client, auth_headers, db):
     """Assistants should appear in the staff list."""
     uid = str(uuid.uuid4())
     assistant = User(
-        supabase_uid=uid, email="assistant@test.com",
+        pb_user_id=uid, email="assistant@test.com",
         first_name="Test", last_name="Assistant",
         role=UserRole.ASSISTANT, is_active=True,
     )
@@ -70,6 +70,6 @@ def test_list_staff_includes_assistant(client, auth_headers, db):
 
 
 def test_list_staff_unauthenticated(client):
-    """Unauthenticated requests should be rejected."""
+    """Unauthenticated requests should be rejected (401, no credentials)."""
     response = client.get("/api/v1/auth/staff")
-    assert response.status_code == 403
+    assert response.status_code == 401
