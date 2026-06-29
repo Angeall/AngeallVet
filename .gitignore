@@ -45,3 +45,15 @@ coverage/
 
 # Alembic
 alembic/versions/*.pyc
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/.cache/
+
+# PocketBase (local data)
+pb_data/
+
+# Local docker overrides (host-specific, e.g. port remaps)
+docker-compose.override.yml
