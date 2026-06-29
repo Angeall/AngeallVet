@@ -1,6 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from datetime import datetime, timezone
 
 from app.api.deps import get_tenant_db
@@ -39,6 +39,42 @@ def _enrich_hospitalization(hosp, db):
     return data
 
 
+def _enrich_hospitalizations(hosps, db):
+    """Batch version of _enrich_hospitalization (care_tasks eager-loaded; animal/
+    client/vet/task-user names resolved in a few queries for the whole page)."""
+    if not hosps:
+        return []
+    datas = [HospitalizationResponse.model_validate(h).model_dump() for h in hosps]
+    animal_ids = {h.animal_id for h in hosps if h.animal_id}
+    animals = {a.id: a for a in db.query(Animal).filter(Animal.id.in_(animal_ids))} if animal_ids else {}
+    client_ids = {a.client_id for a in animals.values() if a.client_id}
+    clients = {c.id: c for c in db.query(Client).filter(Client.id.in_(client_ids))} if client_ids else {}
+    user_ids = {h.veterinarian_id for h in hosps if h.veterinarian_id}
+    user_ids |= {
+        t["completed_by_id"]
+        for d in datas
+        for t in d.get("care_tasks", [])
+        if t.get("completed_by_id")
+    }
+    users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids))} if user_ids else {}
+    for h, data in zip(hosps, datas):
+        animal = animals.get(h.animal_id)
+        if animal:
+            data["animal_name"] = animal.name
+            data["client_id"] = animal.client_id
+            client = clients.get(animal.client_id)
+            if client:
+                data["client_name"] = f"{client.last_name} {client.first_name}"
+        vet = users.get(h.veterinarian_id)
+        if vet:
+            data["veterinarian_name"] = f"Dr. {vet.last_name}"
+        for task in data.get("care_tasks", []):
+            u = users.get(task.get("completed_by_id"))
+            if u:
+                task["completed_by_name"] = f"{u.first_name} {u.last_name}"
+    return datas
+
+
 @router.get("", response_model=list[HospitalizationResponse])
 def list_hospitalizations(
     active_only: bool = Query(True),
@@ -51,8 +87,12 @@ def list_hospitalizations(
         query = query.filter(Hospitalization.status == HospitalizationStatus.ACTIVE)
     if animal_id is not None:
         query = query.filter(Hospitalization.animal_id == animal_id)
-    hosps = query.order_by(Hospitalization.admitted_at.desc()).all()
-    return [_enrich_hospitalization(h, db) for h in hosps]
+    hosps = (
+        query.options(selectinload(Hospitalization.care_tasks))
+        .order_by(Hospitalization.admitted_at.desc())
+        .all()
+    )
+    return _enrich_hospitalizations(hosps, db)
 
 
 @router.post("", response_model=HospitalizationResponse, status_code=201)

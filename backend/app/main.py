@@ -41,12 +41,15 @@ class TenantMiddleware:
         return await self.app(scope, receive, send)
 
 
+# OpenAPI docs (Swagger / ReDoc / schema) are exposed only in dev — disabled in
+# production so the API surface isn't published.
 app = FastAPI(
     title=settings.APP_NAME,
     description="Système de gestion pour cliniques vétérinaires (PMS)",
     version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
+    docs_url="/api/docs" if settings.is_dev_env else None,
+    redoc_url="/api/redoc" if settings.is_dev_env else None,
+    openapi_url="/openapi.json" if settings.is_dev_env else None,
 )
 
 app.add_middleware(
@@ -185,7 +188,7 @@ def on_startup():
         "dev-secret-key",
         "change-me-to-a-random-secret-key-in-production",
     }
-    _is_prod = settings.APP_ENV.lower() not in ("development", "dev", "local", "test")
+    _is_prod = not settings.is_dev_env
     if _is_prod and settings.APP_SECRET_KEY in _insecure_secrets:
         raise RuntimeError(
             "APP_SECRET_KEY must be set to a strong, unique value in production "

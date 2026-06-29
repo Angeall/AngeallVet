@@ -96,6 +96,11 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         return json.loads(self.CORS_ORIGINS)
 
+    @property
+    def is_dev_env(self) -> bool:
+        """True for development-like environments (dev/local/test)."""
+        return self.APP_ENV.lower() in ("development", "dev", "local", "test")
+
     class Config:
         env_file = ".env"
         case_sensitive = True

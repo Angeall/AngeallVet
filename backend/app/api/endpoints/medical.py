@@ -2,7 +2,7 @@ import os
 import uuid as uuid_mod
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Request
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from typing import Optional
 from decimal import Decimal
 
@@ -46,6 +46,42 @@ def _enrich_record(record, db):
     return data
 
 
+def _enrich_records(records, db):
+    """Batch version of _enrich_record: with relationships eager-loaded, resolves
+    vet names, source invoices and home-treatment product names in 3 queries for
+    the whole page (instead of several per record)."""
+    if not records:
+        return []
+    datas = [MedicalRecordResponse.model_validate(r).model_dump() for r in records]
+    vet_ids = {r.veterinarian_id for r in records if r.veterinarian_id}
+    vets = {u.id: u for u in db.query(User).filter(User.id.in_(vet_ids))} if vet_ids else {}
+    rec_ids = [r.id for r in records]
+    inv_map = {}
+    if rec_ids:
+        for inv_id, mr_id in db.query(Invoice.id, Invoice.medical_record_id).filter(
+            Invoice.medical_record_id.in_(rec_ids)
+        ):
+            inv_map[mr_id] = inv_id
+    prod_ids = {
+        p["product_id"]
+        for d in datas
+        for p in d.get("home_treatment_products", [])
+        if p.get("product_id")
+    }
+    products = {p.id: p for p in db.query(Product).filter(Product.id.in_(prod_ids))} if prod_ids else {}
+    for r, data in zip(records, datas):
+        for p in data.get("home_treatment_products", []):
+            prod = products.get(p.get("product_id"))
+            if prod:
+                p["product_name"] = prod.name
+        vet = vets.get(r.veterinarian_id)
+        if vet:
+            data["veterinarian_name"] = f"Dr. {vet.last_name}"
+        if r.id in inv_map:
+            data["invoice_id"] = inv_map[r.id]
+    return datas
+
+
 @router.get("/records", response_model=list[MedicalRecordResponse])
 def list_records(
     animal_id: Optional[int] = Query(None),
@@ -60,8 +96,18 @@ def list_records(
         query = query.filter(MedicalRecord.animal_id == animal_id)
     if record_type:
         query = query.filter(MedicalRecord.record_type == record_type)
-    records = query.order_by(MedicalRecord.created_at.desc()).offset(skip).limit(limit).all()
-    return [_enrich_record(r, db) for r in records]
+    records = (
+        query.options(
+            selectinload(MedicalRecord.prescriptions).selectinload(Prescription.items),
+            selectinload(MedicalRecord.attachments),
+            selectinload(MedicalRecord.home_treatment_products),
+        )
+        .order_by(MedicalRecord.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return _enrich_records(records, db)
 
 
 @router.post("/records", response_model=MedicalRecordResponse, status_code=201)

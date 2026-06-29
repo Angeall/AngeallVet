@@ -27,6 +27,27 @@ def _enrich_appointment(appt, db):
     return appt
 
 
+def _enrich_appointments(appointments, db):
+    """Batch version of _enrich_appointment: resolves vet/client/animal names in
+    3 queries for the whole page instead of 3 per row (N+1)."""
+    if not appointments:
+        return appointments
+    vet_ids = {a.veterinarian_id for a in appointments if a.veterinarian_id}
+    client_ids = {a.client_id for a in appointments if a.client_id}
+    animal_ids = {a.animal_id for a in appointments if a.animal_id}
+    vets = {u.id: u for u in db.query(User).filter(User.id.in_(vet_ids))} if vet_ids else {}
+    clients = {c.id: c for c in db.query(Client).filter(Client.id.in_(client_ids))} if client_ids else {}
+    animals = {a.id: a for a in db.query(Animal).filter(Animal.id.in_(animal_ids))} if animal_ids else {}
+    for appt in appointments:
+        vet = vets.get(appt.veterinarian_id)
+        client = clients.get(appt.client_id)
+        animal = animals.get(appt.animal_id)
+        appt.veterinarian_name = f"Dr. {vet.last_name} {vet.first_name}" if vet else None
+        appt.client_name = f"{client.last_name} {client.first_name}" if client else None
+        appt.animal_name = animal.name if animal else None
+    return appointments
+
+
 @router.get("", response_model=list[AppointmentResponse])
 def list_appointments(
     date_from: Optional[date] = Query(None),
@@ -51,7 +72,7 @@ def list_appointments(
     if status:
         query = query.filter(Appointment.status == status)
     appointments = query.order_by(Appointment.start_time).offset(skip).limit(limit).all()
-    return [_enrich_appointment(a, db) for a in appointments]
+    return _enrich_appointments(appointments, db)
 
 
 @router.post("", response_model=AppointmentResponse, status_code=201)
@@ -89,7 +110,7 @@ def get_waiting_room(
     if veterinarian_id:
         query = query.filter(Appointment.veterinarian_id == veterinarian_id)
     appointments = query.order_by(Appointment.start_time).all()
-    return [_enrich_appointment(a, db) for a in appointments]
+    return _enrich_appointments(appointments, db)
 
 
 @router.get("/{appointment_id}", response_model=AppointmentResponse)

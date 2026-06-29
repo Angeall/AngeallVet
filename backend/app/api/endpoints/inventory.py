@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_
 from typing import Optional
 from datetime import date, timedelta
@@ -42,7 +42,13 @@ def list_products(
         query = query.filter(Product.product_type == product_type)
     if low_stock:
         query = query.filter(Product.stock_quantity <= Product.stock_alert_threshold)
-    return query.order_by(Product.name).offset(skip).limit(limit).all()
+    return (
+        query.options(selectinload(Product.lots))
+        .order_by(Product.name)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.post("/products", response_model=ProductResponse, status_code=201)
@@ -235,6 +241,7 @@ def get_shortcuts(
     """Products flagged as shortcuts for quick billing buttons."""
     return (
         db.query(Product)
+        .options(selectinload(Product.lots))
         .filter(Product.is_active == True, Product.is_shortcut == True)
         .order_by(Product.name)
         .all()
@@ -248,6 +255,7 @@ def get_stock_alerts(
 ):
     return (
         db.query(Product)
+        .options(selectinload(Product.lots))
         .filter(
             Product.is_active == True,
             Product.stock_quantity <= Product.stock_alert_threshold,

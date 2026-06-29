@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import or_
 from typing import Optional
 
@@ -106,7 +106,13 @@ def list_animals(
                 Animal.tattoo_number.ilike(pattern),
             )
         )
-    animals = query.order_by(Animal.name).offset(skip).limit(limit).all()
+    animals = (
+        query.options(selectinload(Animal.association))
+        .order_by(Animal.name)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
     return [_enrich_animal(a) for a in animals]
 
 
