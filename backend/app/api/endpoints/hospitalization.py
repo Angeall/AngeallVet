@@ -5,6 +5,9 @@ from datetime import datetime, timezone
 
 from app.api.deps import get_tenant_db
 from app.core.security import get_current_user, require_roles
+from app.core.idempotency import (
+    idempotency_key_header, replayed_entity_id, remember_entity,
+)
 from app.models.user import User, UserRole
 from app.models.hospitalization import Hospitalization, CareTask, HospitalizationStatus
 from app.models.animal import Animal
@@ -98,9 +101,15 @@ def list_hospitalizations(
 @router.post("", response_model=HospitalizationResponse, status_code=201)
 def create_hospitalization(
     data: HospitalizationCreate,
+    idem_key: Optional[str] = Depends(idempotency_key_header),
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.VETERINARIAN)),
 ):
+    prior_id = replayed_entity_id(db, idem_key, "hospitalization")
+    if prior_id is not None:
+        existing = db.query(Hospitalization).filter(Hospitalization.id == prior_id).first()
+        if existing:
+            return _enrich_hospitalization(existing, db)
     hosp = Hospitalization(
         animal_id=data.animal_id,
         veterinarian_id=current_user.id,
@@ -118,6 +127,7 @@ def create_hospitalization(
         )
         db.add(task)
 
+    remember_entity(db, idem_key, "hospitalization", hosp.id)
     db.commit()
     db.refresh(hosp)
     return _enrich_hospitalization(hosp, db)

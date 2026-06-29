@@ -5,6 +5,9 @@ from datetime import datetime, date
 
 from app.api.deps import get_tenant_db
 from app.core.security import get_current_user
+from app.core.idempotency import (
+    idempotency_key_header, replayed_entity_id, remember_entity,
+)
 from app.models.user import User, UserRole, Notification
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.animal import Animal
@@ -78,11 +81,19 @@ def list_appointments(
 @router.post("", response_model=AppointmentResponse, status_code=201)
 def create_appointment(
     data: AppointmentCreate,
+    idem_key: Optional[str] = Depends(idempotency_key_header),
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
+    prior_id = replayed_entity_id(db, idem_key, "appointment")
+    if prior_id is not None:
+        existing = db.query(Appointment).filter(Appointment.id == prior_id).first()
+        if existing:
+            return _enrich_appointment(existing, db)
     appointment = Appointment(**data.model_dump())
     db.add(appointment)
+    db.flush()
+    remember_entity(db, idem_key, "appointment", appointment.id)
     db.commit()
     db.refresh(appointment)
     return _enrich_appointment(appointment, db)

@@ -61,6 +61,10 @@ api.interceptors.response.use(
   }
 );
 
+// Config axios portant la clé d'idempotence pour les écritures rejouables hors
+// ligne (dédupliquées côté serveur). Voir services/mutations.js.
+const idem = (key) => (key ? { headers: { 'Idempotency-Key': key } } : undefined);
+
 // Auth (PocketBase handles credentials; backend issues the application JWT)
 export const authAPI = {
   session: (pbToken) => api.post('/auth/session', { pb_token: pbToken }),
@@ -85,7 +89,7 @@ export const authAPI = {
 export const clientsAPI = {
   list: (params) => api.get('/clients', { params }),
   get: (id) => api.get(`/clients/${id}`),
-  create: (data) => api.post('/clients', data),
+  create: (data, idempotencyKey) => api.post('/clients', data, idem(idempotencyKey)),
   update: (id, data) => api.put(`/clients/${id}`, data),
   delete: (id) => api.delete(`/clients/${id}`),
   merge: (data) => api.post('/clients/merge', data),
@@ -100,9 +104,9 @@ export const clientsAPI = {
 export const animalsAPI = {
   list: (params) => api.get('/animals', { params }),
   get: (id) => api.get(`/animals/${id}`),
-  create: (data) => api.post('/animals', data),
+  create: (data, idempotencyKey) => api.post('/animals', data, idem(idempotencyKey)),
   update: (id, data) => api.put(`/animals/${id}`, data),
-  addAlert: (id, data) => api.post(`/animals/${id}/alerts`, data),
+  addAlert: (id, data, idempotencyKey) => api.post(`/animals/${id}/alerts`, data, idem(idempotencyKey)),
   removeAlert: (id, alertId) => api.delete(`/animals/${id}/alerts/${alertId}`),
   getWeights: (id) => api.get(`/animals/${id}/weights`),
   getLatestWeight: (id) => api.get(`/animals/${id}/weights/latest`),
@@ -119,7 +123,7 @@ export const animalsAPI = {
 export const appointmentsAPI = {
   list: (params) => api.get('/appointments', { params }),
   get: (id) => api.get(`/appointments/${id}`),
-  create: (data) => api.post('/appointments', data),
+  create: (data, idempotencyKey) => api.post('/appointments', data, idem(idempotencyKey)),
   update: (id, data) => api.put(`/appointments/${id}`, data),
   updateStatus: (id, data) => api.patch(`/appointments/${id}/status`, data),
   cancel: (id) => api.delete(`/appointments/${id}`),
@@ -203,7 +207,7 @@ export const settingsAPI = {
 export const hospitalizationAPI = {
   list: (params) => api.get('/hospitalization', { params }),
   get: (id) => api.get(`/hospitalization/${id}`),
-  create: (data) => api.post('/hospitalization', data),
+  create: (data, idempotencyKey) => api.post('/hospitalization', data, idem(idempotencyKey)),
   update: (id, data) => api.put(`/hospitalization/${id}`, data),
   addTask: (hospId, data) => api.post(`/hospitalization/${hospId}/tasks`, data),
   updateTask: (hospId, taskId, data) =>

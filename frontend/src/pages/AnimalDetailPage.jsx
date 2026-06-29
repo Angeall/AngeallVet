@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { animalsAPI, medicalAPI, hospitalizationAPI, billingAPI, inventoryAPI, communicationsAPI } from '../services/api';
-import { useAnimalDetail, useCreateMedicalRecord, useAddWeight } from '../hooks/useAnimalDetail';
+import { useAnimalDetail, useCreateMedicalRecord, useAddWeight, animalDetailKey } from '../hooks/useAnimalDetail';
+import { useOfflineMutation } from '../hooks/useOfflineMutation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
 
@@ -17,6 +18,42 @@ export default function AnimalDetailPage() {
   const appointments = detail?.appointments ?? [];
   const { submitRecord } = useCreateMedicalRecord(id, animal?.name);
   const { addWeight: submitWeight } = useAddWeight(id, animal?.name);
+
+  const detailKey = animalDetailKey(id);
+  const addAlertMut = useOfflineMutation({
+    mutationKey: ['animals', 'alerts', 'add'],
+    label: animal?.name ? `Alerte — ${animal.name}` : 'Alerte',
+    queryKey: detailKey,
+    successMessage: 'Alerte ajoutée',
+    offlineMessage: 'Alerte enregistrée — synchronisation en attente',
+    applyOptimistic: (old, { payload, idempotencyKey }) =>
+      old ? { ...old, animal: { ...old.animal, alerts: [...(old.animal?.alerts || []), { id: `tmp-${idempotencyKey}`, ...payload, is_active: true, __optimistic: true }] } } : old,
+  });
+  const removeAlertMut = useOfflineMutation({
+    mutationKey: ['animals', 'alerts', 'remove'],
+    label: 'Suppression d’alerte',
+    queryKey: detailKey,
+    successMessage: 'Alerte supprimée',
+    applyOptimistic: (old, { alertId }) =>
+      old ? { ...old, animal: { ...old.animal, alerts: (old.animal?.alerts || []).map((a) => (a.id === alertId ? { ...a, is_active: false } : a)) } } : old,
+  });
+  const updateAnimalMut = useOfflineMutation({
+    mutationKey: ['animals', 'update'],
+    label: animal?.name ? `Fiche — ${animal.name}` : 'Fiche animal',
+    queryKey: detailKey,
+    successMessage: 'Animal mis à jour',
+    offlineMessage: 'Modifications enregistrées — synchronisation en attente',
+    applyOptimistic: (old, { payload }) => (old ? { ...old, animal: { ...old.animal, ...payload } } : old),
+  });
+  const hospitalizeMut = useOfflineMutation({
+    mutationKey: ['hospitalization', 'create'],
+    label: animal?.name ? `Hospitalisation — ${animal.name}` : 'Hospitalisation',
+    queryKey: detailKey,
+    successMessage: 'Animal hospitalisé',
+    offlineMessage: 'Hospitalisation enregistrée — synchronisation en attente',
+    applyOptimistic: (old, { payload, idempotencyKey }) =>
+      old ? { ...old, hospitalizations: [{ id: `tmp-${idempotencyKey}`, ...payload, status: 'active', __optimistic: true }, ...(old.hospitalizations || [])] } : old,
+  });
   const [tab, setTab] = useState('medical');
   const [newWeight, setNewWeight] = useState('');
   const [showRecordForm, setShowRecordForm] = useState(false);
@@ -214,12 +251,11 @@ export default function AnimalDetailPage() {
 
   const activeHosp = hospitalizations.find((h) => h.status === 'active');
 
-  const handleHospitalize = async (e) => {
+  const handleHospitalize = (e) => {
     e.preventDefault();
-    try {
-      await hospitalizationAPI.create({ animal_id: parseInt(id), reason: hospForm.reason, cage_number: hospForm.cage_number || null });
-      toast.success('Animal hospitalise'); setShowHospForm(false); setHospForm({ reason: '', cage_number: '' }); refetch();
-    } catch { toast.error('Erreur'); }
+    hospitalizeMut.run({ payload: { animal_id: parseInt(id), reason: hospForm.reason, cage_number: hospForm.cage_number || null } });
+    setShowHospForm(false);
+    setHospForm({ reason: '', cage_number: '' });
   };
 
   const handleDischarge = async () => {
@@ -227,21 +263,21 @@ export default function AnimalDetailPage() {
     try { await hospitalizationAPI.update(activeHosp.id, { status: 'discharged' }); toast.success('Animal sorti'); refetch(); } catch { toast.error('Erreur'); }
   };
 
-  const handleAlertSubmit = async (e) => {
+  const handleAlertSubmit = (e) => {
     e.preventDefault();
-    try { await animalsAPI.addAlert(id, alertForm); toast.success('Alerte ajoutee'); setShowAlertForm(false); setAlertForm({ alert_type: 'allergy', message: '', severity: 'warning' }); refetch(); } catch { toast.error('Erreur'); }
+    addAlertMut.run({ id, payload: alertForm });
+    setShowAlertForm(false);
+    setAlertForm({ alert_type: 'allergy', message: '', severity: 'warning' });
   };
 
-  const removeAlert = async (alertId) => {
-    try { await animalsAPI.removeAlert(id, alertId); toast.success('Alerte supprimee'); refetch(); } catch { toast.error('Erreur'); }
+  const removeAlert = (alertId) => {
+    removeAlertMut.run({ id, alertId });
   };
 
-  const handleEditSubmit = async (e) => {
+  const handleEditSubmit = (e) => {
     e.preventDefault();
-    try {
-      await animalsAPI.update(id, { ...editForm, date_of_birth: editForm.date_of_birth || null, microchip_number: editForm.microchip_number || null, tattoo_number: editForm.tattoo_number || null, vital_status_date: editForm.vital_status_date || null, is_deceased: editForm.vital_status === 'deceased', notes: editForm.notes || null });
-      toast.success('Animal mis a jour'); setShowEditForm(false); refetch();
-    } catch { toast.error('Erreur'); }
+    updateAnimalMut.run({ id, payload: { ...editForm, date_of_birth: editForm.date_of_birth || null, microchip_number: editForm.microchip_number || null, tattoo_number: editForm.tattoo_number || null, vital_status_date: editForm.vital_status_date || null, is_deceased: editForm.vital_status === 'deceased', notes: editForm.notes || null } });
+    setShowEditForm(false);
   };
 
   const addInvoiceLine = () => setInvoiceLines([...invoiceLines, { description: '', quantity: '1', unit_price: '', vat_rate: '20.00', product_id: null }]);

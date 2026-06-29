@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { clientsAPI } from '../services/api';
-import toast from 'react-hot-toast';
+import { useOfflineMutation } from '../hooks/useOfflineMutation';
 
 export default function ClientsPage() {
-  const [clients, setClients] = useState([]);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -12,32 +12,33 @@ export default function ClientsPage() {
     address: '', city: '', postal_code: '', vat_number: '',
   });
 
-  const load = useCallback(async () => {
-    try {
-      const res = await clientsAPI.list({ search: search || undefined });
-      setClients(res.data);
-    } catch {
-      toast.error('Erreur de chargement');
-    }
-  }, [search]);
+  const clientsKey = ['clients', search];
+  const { data: clients = [] } = useQuery({
+    queryKey: clientsKey,
+    queryFn: () => clientsAPI.list({ search: search || undefined }).then((r) => r.data),
+  });
 
-  useEffect(() => { load(); }, [load]);
+  const createClient = useOfflineMutation({
+    mutationKey: ['clients', 'create'],
+    label: 'Nouveau client',
+    queryKey: clientsKey,
+    successMessage: 'Client créé',
+    offlineMessage: 'Client enregistré — synchronisation en attente',
+    applyOptimistic: (old, { payload, idempotencyKey }) => [
+      { id: `tmp-${idempotencyKey}`, ...payload, animal_count: 0, account_balance: 0, __optimistic: true },
+      ...(old || []),
+    ],
+  });
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    try {
-      // Convert empty strings to null so backend validation passes
-      const payload = Object.fromEntries(
-        Object.entries(form).map(([k, v]) => [k, v === '' ? null : v])
-      );
-      await clientsAPI.create(payload);
-      toast.success('Client cree');
-      setShowForm(false);
-      setForm({ first_name: '', last_name: '', email: '', phone: '', mobile: '', address: '', city: '', postal_code: '', vat_number: '' });
-      load();
-    } catch {
-      toast.error('Erreur lors de la creation');
-    }
+    // Convert empty strings to null so backend validation passes
+    const payload = Object.fromEntries(
+      Object.entries(form).map(([k, v]) => [k, v === '' ? null : v])
+    );
+    createClient.run({ payload });
+    setShowForm(false);
+    setForm({ first_name: '', last_name: '', email: '', phone: '', mobile: '', address: '', city: '', postal_code: '', vat_number: '' });
   };
 
   return (

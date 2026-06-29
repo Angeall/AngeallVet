@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { appointmentsAPI, clientsAPI, animalsAPI, authAPI, settingsAPI } from '../services/api';
+import { useOfflineMutation } from '../hooks/useOfflineMutation';
 import toast from 'react-hot-toast';
 
 const typeColors = {
@@ -21,7 +23,6 @@ const statusColors = {
 };
 
 export default function AgendaPage() {
-  const [appointments, setAppointments] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [showForm, setShowForm] = useState(false);
   const [defaultDuration, setDefaultDuration] = useState(30);
@@ -82,16 +83,46 @@ export default function AgendaPage() {
     loadSpecies();
   }, []);
 
-  const loadAppointments = async () => {
-    try {
+  const apptKey = ['appointments', selectedDate, filterVetId];
+  const { data: appointments = [] } = useQuery({
+    queryKey: apptKey,
+    queryFn: () => {
       const params = { date_from: selectedDate, date_to: selectedDate };
       if (filterVetId) params.veterinarian_id = parseInt(filterVetId);
-      const res = await appointmentsAPI.list(params);
-      setAppointments(res.data);
-    } catch { toast.error('Erreur de chargement'); }
-  };
+      return appointmentsAPI.list(params).then((r) => r.data);
+    },
+  });
 
-  useEffect(() => { loadAppointments(); }, [selectedDate, filterVetId]);
+  const createAppt = useOfflineMutation({
+    mutationKey: ['appointments', 'create'],
+    label: 'Nouveau rendez-vous',
+    queryKey: apptKey,
+    successMessage: 'RDV créé',
+    offlineMessage: 'RDV enregistré — synchronisation en attente',
+    applyOptimistic: (old, { optimistic }) =>
+      [...(old || []), optimistic].sort((a, b) => new Date(a.start_time) - new Date(b.start_time)),
+  });
+  const updateAppt = useOfflineMutation({
+    mutationKey: ['appointments', 'update'],
+    label: 'Modification du RDV',
+    queryKey: apptKey,
+    successMessage: 'RDV modifié',
+    offlineMessage: 'Modification enregistrée — synchronisation en attente',
+    applyOptimistic: (old, { id, payload }) => (old || []).map((a) => (a.id === id ? { ...a, ...payload } : a)),
+  });
+  const statusAppt = useOfflineMutation({
+    mutationKey: ['appointments', 'status'],
+    label: 'Statut du RDV',
+    queryKey: apptKey,
+    applyOptimistic: (old, { id, status }) => (old || []).map((a) => (a.id === id ? { ...a, status } : a)),
+  });
+  const cancelAppt = useOfflineMutation({
+    mutationKey: ['appointments', 'cancel'],
+    label: 'Annulation du RDV',
+    queryKey: apptKey,
+    successMessage: 'RDV annulé',
+    applyOptimistic: (old, { id }) => (old || []).map((a) => (a.id === id ? { ...a, status: 'cancelled' } : a)),
+  });
 
   // Auto-compute end_time when start_time changes (if not manually set)
   useEffect(() => {
@@ -132,31 +163,36 @@ export default function AgendaPage() {
     setForm(prev => ({ ...prev, animal_id: animal.id }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    try {
-      await appointmentsAPI.create({
-        ...form,
-        client_id: parseInt(form.client_id),
-        animal_id: form.animal_id ? parseInt(form.animal_id) : null,
-        veterinarian_id: parseInt(form.veterinarian_id),
-      });
-      // Create client note if provided
-      if (clientNote.trim() && form.client_id) {
-        try {
-          await clientsAPI.addNote(parseInt(form.client_id), { content: clientNote, source: 'appointment' });
-        } catch {}
-      }
-      toast.success('RDV cree');
-      setShowForm(false);
-      setSelectedClient(null);
-      setSelectedAnimal(null);
-      setClientSearch('');
-      setClientNote('');
-      setAnimalOptions([]);
-      setDurationManuallySet(false);
-      loadAppointments();
-    } catch { toast.error('Erreur lors de la creation'); }
+    const payload = {
+      ...form,
+      client_id: parseInt(form.client_id),
+      animal_id: form.animal_id ? parseInt(form.animal_id) : null,
+      veterinarian_id: parseInt(form.veterinarian_id),
+    };
+    const vet = vets.find((v) => v.id === payload.veterinarian_id);
+    const optimistic = {
+      id: `tmp-${Date.now()}`,
+      ...payload,
+      status: 'scheduled',
+      client_name: selectedClient ? `${selectedClient.last_name} ${selectedClient.first_name}` : null,
+      animal_name: selectedAnimal ? selectedAnimal.name : null,
+      veterinarian_name: vet ? `Dr. ${vet.last_name} ${vet.first_name}` : null,
+      __optimistic: true,
+    };
+    createAppt.run({ payload, optimistic });
+    // Note client (optionnelle, au mieux ; non bloquante).
+    if (clientNote.trim() && form.client_id) {
+      clientsAPI.addNote(parseInt(form.client_id), { content: clientNote, source: 'appointment' }).catch(() => {});
+    }
+    setShowForm(false);
+    setSelectedClient(null);
+    setSelectedAnimal(null);
+    setClientSearch('');
+    setClientNote('');
+    setAnimalOptions([]);
+    setDurationManuallySet(false);
   };
 
   const handleCreateClient = async (e) => {
@@ -196,21 +232,13 @@ export default function AgendaPage() {
   };
 
   // Appointment management
-  const handleCancelAppointment = async (apptId) => {
+  const handleCancelAppointment = (apptId) => {
     if (!confirm('Annuler ce rendez-vous ?')) return;
-    try {
-      await appointmentsAPI.cancel(apptId);
-      toast.success('RDV annule');
-      loadAppointments();
-    } catch { toast.error('Erreur'); }
+    cancelAppt.run({ id: apptId });
   };
 
-  const handleStatusChange = async (apptId, status) => {
-    try {
-      await appointmentsAPI.updateStatus(apptId, { status });
-      toast.success('Statut mis a jour');
-      loadAppointments();
-    } catch { toast.error('Erreur'); }
+  const handleStatusChange = (apptId, status) => {
+    statusAppt.run({ id: apptId, status });
   };
 
   const openEditModal = (appt) => {
@@ -225,21 +253,20 @@ export default function AgendaPage() {
     setShowEditModal(true);
   };
 
-  const handleEditSubmit = async (e) => {
+  const handleEditSubmit = (e) => {
     e.preventDefault();
-    try {
-      await appointmentsAPI.update(editForm.id, {
+    updateAppt.run({
+      id: editForm.id,
+      payload: {
         appointment_type: editForm.appointment_type,
         start_time: editForm.start_time,
         end_time: editForm.end_time,
         reason: editForm.reason,
         notes: editForm.notes,
-      });
-      toast.success('RDV modifie');
-      setShowEditModal(false);
-      setEditForm(null);
-      loadAppointments();
-    } catch { toast.error('Erreur lors de la modification'); }
+      },
+    });
+    setShowEditModal(false);
+    setEditForm(null);
   };
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -530,7 +557,7 @@ export default function AgendaPage() {
                 {appt.veterinarian_name && <div style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>{appt.veterinarian_name}</div>}
               </div>
               {/* Action buttons */}
-              {appt.status !== 'cancelled' && appt.status !== 'completed' && (
+              {!appt.__optimistic && appt.status !== 'cancelled' && appt.status !== 'completed' && (
                 <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
                   {isToday && appt.status === 'scheduled' && (
                     <button className="btn btn-sm" style={{ background: 'var(--teal-50)', color: 'var(--teal-700)', border: '1px solid var(--teal-200)' }} onClick={() => handleStatusChange(appt.id, 'arrived')} title="Client arrive">

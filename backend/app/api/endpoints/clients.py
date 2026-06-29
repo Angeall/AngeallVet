@@ -5,6 +5,9 @@ from typing import Optional
 
 from app.api.deps import get_tenant_db
 from app.core.security import get_current_user
+from app.core.idempotency import (
+    idempotency_key_header, replayed_entity_id, remember_entity,
+)
 from app.models.user import User
 from app.models.client import Client, ClientAlert, ClientNote
 from app.models.animal import Animal
@@ -50,11 +53,19 @@ def list_clients(
 @router.post("", response_model=ClientResponse, status_code=201)
 def create_client(
     data: ClientCreate,
+    idem_key: Optional[str] = Depends(idempotency_key_header),
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
+    prior_id = replayed_entity_id(db, idem_key, "client")
+    if prior_id is not None:
+        existing = db.query(Client).filter(Client.id == prior_id).first()
+        if existing:
+            return existing
     client = Client(**data.model_dump())
     db.add(client)
+    db.flush()
+    remember_entity(db, idem_key, "client", client.id)
     db.commit()
     db.refresh(client)
     return client

@@ -69,3 +69,41 @@ def test_weight_idempotent_replay(client, auth_headers):
 
     weights = client.get(f"/api/v1/animals/{animal_id}/weights", headers=auth_headers)
     assert len(weights.json()) == 1
+
+
+def test_client_idempotent_replay(client, auth_headers):
+    """Same key replayed on client creation -> one client, same id."""
+    headers = {**auth_headers, "Idempotency-Key": "cli-1"}
+    body = {"first_name": "Paul", "last_name": "Durand"}
+
+    first = client.post("/api/v1/clients", headers=headers, json=body)
+    second = client.post("/api/v1/clients", headers=headers, json=body)
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] == second.json()["id"]
+
+    listing = client.get("/api/v1/clients?search=Durand", headers=auth_headers)
+    assert len(listing.json()) == 1
+
+
+def test_appointment_idempotent_replay(client, auth_headers, admin_user):
+    """Same key replayed on appointment creation -> one appointment, same id."""
+    client_id, animal_id = _client_and_animal(client, auth_headers)
+    body = {
+        "client_id": client_id,
+        "animal_id": animal_id,
+        "veterinarian_id": admin_user.id,
+        "appointment_type": "consultation",
+        "start_time": "2026-07-01T10:00:00",
+        "end_time": "2026-07-01T10:30:00",
+    }
+    headers = {**auth_headers, "Idempotency-Key": "appt-1"}
+
+    first = client.post("/api/v1/appointments", headers=headers, json=body)
+    second = client.post("/api/v1/appointments", headers=headers, json=body)
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] == second.json()["id"]
+
+    listing = client.get("/api/v1/appointments?date_from=2026-07-01&date_to=2026-07-01", headers=auth_headers)
+    assert len(listing.json()) == 1

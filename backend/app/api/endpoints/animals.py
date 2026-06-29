@@ -122,11 +122,19 @@ def list_animals(
 @router.post("", response_model=AnimalResponse, status_code=201)
 def create_animal(
     data: AnimalCreate,
+    idem_key: Optional[str] = Depends(idempotency_key_header),
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
+    prior_id = replayed_entity_id(db, idem_key, "animal")
+    if prior_id is not None:
+        existing = db.query(Animal).filter(Animal.id == prior_id).first()
+        if existing:
+            return _enrich_animal(existing)
     animal = Animal(**data.model_dump())
     db.add(animal)
+    db.flush()
+    remember_entity(db, idem_key, "animal", animal.id)
     db.commit()
     db.refresh(animal)
     return _enrich_animal(animal)
@@ -168,14 +176,22 @@ def update_animal(
 def add_alert(
     animal_id: int,
     data: AnimalAlertCreate,
+    idem_key: Optional[str] = Depends(idempotency_key_header),
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
+    prior_id = replayed_entity_id(db, idem_key, "animal_alert")
+    if prior_id is not None:
+        existing = db.query(AnimalAlert).filter(AnimalAlert.id == prior_id).first()
+        if existing:
+            return existing
     animal = db.query(Animal).filter(Animal.id == animal_id).first()
     if not animal:
         raise HTTPException(status_code=404, detail="Animal non trouvé")
     alert = AnimalAlert(animal_id=animal_id, **data.model_dump())
     db.add(alert)
+    db.flush()
+    remember_entity(db, idem_key, "animal_alert", alert.id)
     db.commit()
     db.refresh(alert)
     return alert
