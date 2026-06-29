@@ -7,7 +7,7 @@ from app.core.database import Base
 class ClinicSettings(Base):
     __tablename__ = "clinic_settings"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     clinic_name = Column(String(255))
     address = Column(String(255))
     city = Column(String(100))
@@ -27,7 +27,7 @@ class ClinicSettings(Base):
 class VatRate(Base):
     __tablename__ = "vat_rates"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     rate = Column(Numeric(5, 2), nullable=False)
     label = Column(String(100), nullable=False)
     is_default = Column(Boolean, default=False)

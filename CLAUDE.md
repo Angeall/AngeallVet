@@ -51,7 +51,7 @@ For local dev without the proxy, create `frontend/.env.local` with `VITE_API_URL
 - `get_central_db` — the registry DB; use only for `tenants` management endpoints.
 - `get_current_user` (in `app/core/security.py`) — auth; `require_roles(...)` for RBAC.
 
-**Schema management.** `_ensure_schema()` in `app/main.py` runs at startup on the central DB and every active tenant DB: `create_all` + a `_pending_columns` list of `ALTER TABLE ADD COLUMN` + a `_pending_renames` list. Alembic also runs (non-blocking). **When you add a column to a model, also add it to `_pending_columns`** so pre-existing databases get it.
+**Schema management.** `_ensure_schema()` in `app/main.py` runs at startup on the central DB and every active tenant DB: `create_all` + a `_pending_columns` list of `ALTER TABLE ADD COLUMN` + a `_pending_renames` list. Alembic also runs (non-blocking). **When you add a column to a model, also add it to `_pending_columns`** so pre-existing databases get it. Performance indexes (pg_trgm search + composites) live in `app/core/db_indexes.py` and are applied the same way (Postgres-only, AUTOCOMMIT) plus migration 009 — single source of truth, so add new index DDL there.
 
 ## Gotchas
 

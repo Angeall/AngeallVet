@@ -21,7 +21,7 @@ class RecordType(str, enum.Enum):
 class MedicalRecord(Base):
     __tablename__ = "medical_records"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     animal_id = Column(Integer, ForeignKey("animals.id"), nullable=False, index=True)
     veterinarian_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True, index=True)
@@ -48,7 +48,7 @@ class MedicalRecord(Base):
 class ConsultationTemplate(Base):
     __tablename__ = "consultation_templates"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
     category = Column(String(100))
     species = Column(String(50))
@@ -67,7 +67,7 @@ class ConsultationTemplate(Base):
 class ConsultationTemplateProduct(Base):
     __tablename__ = "consultation_template_products"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     template_id = Column(Integer, ForeignKey("consultation_templates.id"), nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     quantity = Column(Numeric(10, 2), default=1)
@@ -80,7 +80,7 @@ class ConsultationTemplateProduct(Base):
 class Prescription(Base):
     __tablename__ = "prescriptions"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     medical_record_id = Column(Integer, ForeignKey("medical_records.id"), nullable=False, index=True)
     prescription_date = Column(Date, server_default=func.current_date())
     notes = Column(Text)
@@ -93,7 +93,7 @@ class Prescription(Base):
 class PrescriptionItem(Base):
     __tablename__ = "prescription_items"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     prescription_id = Column(Integer, ForeignKey("prescriptions.id"), nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=True, index=True)
     medication_name = Column(String(200), nullable=False)
@@ -110,7 +110,7 @@ class PrescriptionItem(Base):
 class Attachment(Base):
     __tablename__ = "attachments"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     medical_record_id = Column(Integer, ForeignKey("medical_records.id"), nullable=False, index=True)
     file_name = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)
@@ -126,7 +126,7 @@ class Attachment(Base):
 class MedicalRecordProduct(Base):
     __tablename__ = "medical_record_products"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     medical_record_id = Column(Integer, ForeignKey("medical_records.id"), nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     quantity = Column(Numeric(10, 2), default=1)

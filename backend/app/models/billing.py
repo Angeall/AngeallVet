@@ -21,7 +21,7 @@ class InvoiceStatus(str, enum.Enum):
 class InvoiceVeterinarian(Base):
     __tablename__ = "invoice_veterinarians"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -33,7 +33,7 @@ class InvoiceVeterinarian(Base):
 class Invoice(Base):
     __tablename__ = "invoices"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     invoice_number = Column(String(50), unique=True, nullable=False, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
     animal_id = Column(Integer, ForeignKey("animals.id"), index=True)
@@ -60,7 +60,7 @@ class Invoice(Base):
 class InvoiceLine(Base):
     __tablename__ = "invoice_lines"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), index=True)
     description = Column(String(500), nullable=False)
@@ -77,7 +77,7 @@ class InvoiceLine(Base):
 class Estimate(Base):
     __tablename__ = "estimates"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     estimate_number = Column(String(50), unique=True, nullable=False, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
     animal_id = Column(Integer, ForeignKey("animals.id"), index=True)
@@ -99,7 +99,7 @@ class Estimate(Base):
 class EstimateLine(Base):
     __tablename__ = "estimate_lines"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     estimate_id = Column(Integer, ForeignKey("estimates.id"), nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), index=True)
     description = Column(String(500), nullable=False)
@@ -114,7 +114,7 @@ class EstimateLine(Base):
 class Payment(Base):
     __tablename__ = "payments"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
     amount = Column(Numeric(10, 2), nullable=False)
     payment_method = Column(String(50), nullable=False)  # cash, card, check, transfer, stripe

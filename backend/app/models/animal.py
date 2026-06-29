@@ -37,7 +37,7 @@ DEFAULT_SPECIES = [
 class SpeciesRecord(Base):
     __tablename__ = "species"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     code = Column(String(50), unique=True, nullable=False, index=True)
     label = Column(String(100), nullable=False)
     is_active = Column(Boolean, default=True)
@@ -60,7 +60,7 @@ class VitalStatus(str, enum.Enum):
 class Animal(Base):
     __tablename__ = "animals"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
     name = Column(String(100), nullable=False)
     species = Column(String(50), nullable=False)
@@ -95,7 +95,7 @@ class Animal(Base):
 class AnimalAlert(Base):
     __tablename__ = "animal_alerts"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     animal_id = Column(Integer, ForeignKey("animals.id"), nullable=False, index=True)
     alert_type = Column(String(50), nullable=False)  # aggressive, allergy, chronic_disease, other
     message = Column(String(500), nullable=False)
@@ -109,7 +109,7 @@ class AnimalAlert(Base):
 class WeightRecord(Base):
     __tablename__ = "weight_records"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     animal_id = Column(Integer, ForeignKey("animals.id"), nullable=False, index=True)
     weight_kg = Column(Numeric(6, 2), nullable=False)
     recorded_at = Column(DateTime(timezone=True), server_default=func.now())

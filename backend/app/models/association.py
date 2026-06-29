@@ -7,7 +7,7 @@ from app.core.database import Base
 class Association(Base):
     __tablename__ = "associations"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
     contact_name = Column(String(200))
     email = Column(String(255))

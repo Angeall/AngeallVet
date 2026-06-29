@@ -62,6 +62,55 @@ def _enrich_entry(entry, db):
     )
 
 
+def _load_refs(entries, db):
+    """Batch-load the products / vets / animals / clients referenced by a set of
+    entries, returning lookup dicts. Avoids the per-row N+1 of _enrich_entry."""
+    product_ids = {e.product_id for e in entries if e.product_id}
+    vet_ids = {e.prescribing_vet_id for e in entries if e.prescribing_vet_id}
+    animal_ids = {e.patient_animal_id for e in entries if e.patient_animal_id}
+    products = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids))} if product_ids else {}
+    vets = {u.id: u for u in db.query(User).filter(User.id.in_(vet_ids))} if vet_ids else {}
+    animals = {a.id: a for a in db.query(Animal).filter(Animal.id.in_(animal_ids))} if animal_ids else {}
+    client_ids = {a.client_id for a in animals.values() if a.client_id}
+    clients = {c.id: c for c in db.query(Client).filter(Client.id.in_(client_ids))} if client_ids else {}
+    return products, vets, animals, clients
+
+
+def _enrich_entries(entries, db):
+    """Batch version of _enrich_entry (a handful of queries instead of 4 per row)."""
+    if not entries:
+        return []
+    products, vets, animals, clients = _load_refs(entries, db)
+    result = []
+    for e in entries:
+        product = products.get(e.product_id)
+        vet = vets.get(e.prescribing_vet_id)
+        animal = animals.get(e.patient_animal_id)
+        client = clients.get(animal.client_id) if animal else None
+        result.append(ControlledSubstanceEntryResponse(
+            id=e.id,
+            product_id=e.product_id,
+            product_name=product.name if product else None,
+            date=e.date,
+            movement_type=e.movement_type,
+            quantity=e.quantity,
+            lot_number=e.lot_number,
+            patient_animal_id=e.patient_animal_id,
+            patient_animal_name=animal.name if animal else None,
+            patient_owner_name=e.patient_owner_name,
+            patient_client_name=f"{client.last_name} {client.first_name}" if client else None,
+            prescribing_vet_id=e.prescribing_vet_id,
+            prescribing_vet_name=f"{vet.first_name} {vet.last_name}" if vet else None,
+            reason=e.reason,
+            dosage=e.dosage,
+            total_delivered=e.total_delivered,
+            remaining_stock=e.remaining_stock,
+            notes=e.notes,
+            created_at=e.created_at,
+        ))
+    return result
+
+
 @router.get("/register", response_model=list[ControlledSubstanceEntryResponse])
 def list_register(
     product_id: Optional[int] = Query(None),
@@ -85,7 +134,7 @@ def list_register(
         ControlledSubstanceEntry.id.desc(),
     ).offset(skip).limit(limit).all()
 
-    return [_enrich_entry(e, db) for e in entries]
+    return _enrich_entries(entries, db)
 
 
 @router.post("/entries", response_model=ControlledSubstanceEntryResponse, status_code=201)
@@ -166,20 +215,14 @@ def export_register(
         "Stock restant", "Notes",
     ])
 
+    products, vets, animals, _clients = _load_refs(entries, db)
+    type_labels = {"in": "Entrée", "out": "Sortie", "destruction": "Destruction", "prescription": "Prescription"}
     for entry in entries:
-        product = db.query(Product).filter(Product.id == entry.product_id).first()
-        vet_name = ""
-        if entry.prescribing_vet_id:
-            vet = db.query(User).filter(User.id == entry.prescribing_vet_id).first()
-            if vet:
-                vet_name = f"{vet.first_name} {vet.last_name}"
-        animal_name = ""
-        if entry.patient_animal_id:
-            animal = db.query(Animal).filter(Animal.id == entry.patient_animal_id).first()
-            if animal:
-                animal_name = animal.name
-
-        type_labels = {"in": "Entrée", "out": "Sortie", "destruction": "Destruction", "prescription": "Prescription"}
+        product = products.get(entry.product_id)
+        vet = vets.get(entry.prescribing_vet_id)
+        animal = animals.get(entry.patient_animal_id)
+        vet_name = f"{vet.first_name} {vet.last_name}" if vet else ""
+        animal_name = animal.name if animal else ""
         writer.writerow([
             entry.date.isoformat() if entry.date else "",
             product.name if product else str(entry.product_id),

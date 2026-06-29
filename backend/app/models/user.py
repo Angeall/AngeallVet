@@ -52,7 +52,7 @@ DEFAULT_PERMISSIONS = {
 class RolePermission(Base):
     __tablename__ = "role_permissions"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     role = Column(SAEnum(UserRole), nullable=False, unique=True)
     permissions = Column(JSON, nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -61,7 +61,7 @@ class RolePermission(Base):
 class Notification(Base):
     __tablename__ = "notifications"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=False, index=True)
     title = Column(String(255), nullable=False)
     message = Column(String(1000))
@@ -74,7 +74,7 @@ class Notification(Base):
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     # PocketBase auth record id (replaces the former Supabase uid)
     pb_user_id = Column(String(255), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)

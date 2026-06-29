@@ -157,6 +157,25 @@ def _ensure_schema(db_engine):
                 logger.info("Renamed column %s.%s -> %s", table, old, new)
         conn.commit()
 
+    # Performance indexes (PostgreSQL only). Runs in AUTOCOMMIT so one failing
+    # statement (e.g. pg_trgm not permitted) does not abort the others.
+    if db_engine.dialect.name == "postgresql":
+        from app.core.db_indexes import PG_TRGM_EXTENSION, PERF_INDEXES
+
+        tables = set(inspect(db_engine).get_table_names())
+        statements = (
+            [PG_TRGM_EXTENSION]
+            + [ddl for t, ddl in PERF_INDEXES if t in tables]
+            # Drop the now-redundant per-PK indexes (the PK is already indexed).
+            + [f"DROP INDEX IF EXISTS ix_{t}_id" for t in tables]
+        )
+        with db_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as ac:
+            for stmt in statements:
+                try:
+                    ac.execute(text(stmt))
+                except Exception as e:
+                    logger.warning("Index step skipped: %s", e)
+
 
 @app.on_event("startup")
 def on_startup():

@@ -14,7 +14,7 @@ class Tenant(Base):
     """
     __tablename__ = "tenants"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     slug = Column(String(100), unique=True, nullable=False, index=True)
     # Encrypted at rest (pgcrypto) — contains the tenant DB password.

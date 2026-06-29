@@ -8,7 +8,7 @@ from app.core.database import Base
 class Client(Base):
     __tablename__ = "clients"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False, index=True)
     email = Column(String(255), index=True)
@@ -37,7 +37,7 @@ class Client(Base):
 class ClientAlert(Base):
     __tablename__ = "client_alerts"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
     alert_type = Column(String(50), nullable=False)  # bad_payer, aggressive, other
     message = Column(String(500), nullable=False)
@@ -51,7 +51,7 @@ class ClientAlert(Base):
 class ClientNote(Base):
     __tablename__ = "client_notes"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
     content = Column(Text, nullable=False)
     source = Column(String(30), default="manual")  # manual, appointment

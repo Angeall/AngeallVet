@@ -10,7 +10,7 @@ from app.core.database import Base
 class ControlledSubstanceEntry(Base):
     __tablename__ = "controlled_substance_entries"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     date = Column(Date, nullable=False, server_default=func.current_date(), index=True)
     movement_type = Column(String(20), nullable=False)  # in, out, destruction, prescription

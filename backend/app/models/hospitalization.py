@@ -18,7 +18,7 @@ class HospitalizationStatus(str, enum.Enum):
 class Hospitalization(Base):
     __tablename__ = "hospitalizations"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     animal_id = Column(Integer, ForeignKey("animals.id"), nullable=False, index=True)
     veterinarian_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     status = Column(SAEnum(HospitalizationStatus), default=HospitalizationStatus.ACTIVE, index=True)
@@ -36,7 +36,7 @@ class Hospitalization(Base):
 class CareTask(Base):
     __tablename__ = "care_tasks"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     hospitalization_id = Column(Integer, ForeignKey("hospitalizations.id"), nullable=False, index=True)
     scheduled_at = Column(DateTime(timezone=True), nullable=False, index=True)
     task_type = Column(String(50), nullable=False)  # medication, vitals, feeding, observation

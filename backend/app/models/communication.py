@@ -9,7 +9,7 @@ from app.core.database import Base
 class Communication(Base):
     __tablename__ = "communications"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
     channel = Column(String(20), nullable=False)  # email, sms
     subject = Column(String(500))
@@ -23,7 +23,7 @@ class Communication(Base):
 class ReminderRule(Base):
     __tablename__ = "reminder_rules"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
     reminder_type = Column(String(50), nullable=False)  # vaccine, antiparasitic, checkup
     species = Column(String(50))  # filter by species or null for all
@@ -41,7 +41,7 @@ class ReminderRule(Base):
 class ReminderLog(Base):
     __tablename__ = "reminder_logs"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     rule_id = Column(Integer, ForeignKey("reminder_rules.id"), index=True)
     animal_id = Column(Integer, ForeignKey("animals.id"), nullable=False, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)

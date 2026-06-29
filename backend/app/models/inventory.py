@@ -19,7 +19,7 @@ class ProductType(str, enum.Enum):
 class Product(Base):
     __tablename__ = "products"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False, index=True)
     reference = Column(String(100), unique=True, index=True)
     product_type = Column(SAEnum(ProductType), nullable=False)
@@ -47,7 +47,7 @@ class Product(Base):
 class ProductLot(Base):
     __tablename__ = "product_lots"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     lot_number = Column(String(100), nullable=False)
     expiry_date = Column(Date, nullable=False, index=True)
@@ -60,7 +60,7 @@ class ProductLot(Base):
 class StockMovement(Base):
     __tablename__ = "stock_movements"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     lot_id = Column(Integer, ForeignKey("product_lots.id"), index=True)
     movement_type = Column(String(20), nullable=False)  # in, out, adjustment
@@ -75,7 +75,7 @@ class StockMovement(Base):
 class Supplier(Base):
     __tablename__ = "suppliers"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
     contact_name = Column(String(200))
     email = Column(String(255))
@@ -91,7 +91,7 @@ class Supplier(Base):
 class PurchaseOrder(Base):
     __tablename__ = "purchase_orders"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False, index=True)
     order_number = Column(String(50), unique=True, nullable=False)
     status = Column(String(20), default="draft")  # draft, sent, received, cancelled
@@ -108,7 +108,7 @@ class PurchaseOrder(Base):
 class PurchaseOrderItem(Base):
     __tablename__ = "purchase_order_items"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     order_id = Column(Integer, ForeignKey("purchase_orders.id"), nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     quantity = Column(Numeric(10, 2), nullable=False)
