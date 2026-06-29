@@ -5,6 +5,9 @@ from typing import Optional
 
 from app.api.deps import get_tenant_db
 from app.core.security import get_current_user, require_roles
+from app.core.idempotency import (
+    idempotency_key_header, replayed_entity_id, remember_entity,
+)
 from app.models.user import User, UserRole
 from app.models.animal import Animal, AnimalAlert, WeightRecord, SpeciesRecord
 from app.models.association import Association
@@ -230,9 +233,17 @@ def get_latest_weight(
 def add_weight(
     animal_id: int,
     data: WeightRecordCreate,
+    idem_key: Optional[str] = Depends(idempotency_key_header),
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Replay from the offline queue: return the original weight, never a duplicate.
+    prior_id = replayed_entity_id(db, idem_key, "weight_record")
+    if prior_id is not None:
+        existing = db.query(WeightRecord).filter(WeightRecord.id == prior_id).first()
+        if existing:
+            return existing
+
     animal = db.query(Animal).filter(Animal.id == animal_id).first()
     if not animal:
         raise HTTPException(status_code=404, detail="Animal non trouvé")
@@ -242,6 +253,8 @@ def add_weight(
         recorded_by_id=current_user.id,
     )
     db.add(record)
+    db.flush()
+    remember_entity(db, idem_key, "weight_record", record.id)
     db.commit()
     db.refresh(record)
     return record

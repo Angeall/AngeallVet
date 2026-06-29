@@ -50,6 +50,9 @@ api.interceptors.response.use(
           // fall through to sign-out
         }
       }
+      // Hors ligne : ne pas déconnecter sur un 401 transitoire — on garde la
+      // session pour la reprise au retour du réseau.
+      if (!navigator.onLine) return Promise.reject(error);
       setAppToken(null);
       pb.authStore.clear();
       window.location.href = '/login';
@@ -103,7 +106,8 @@ export const animalsAPI = {
   removeAlert: (id, alertId) => api.delete(`/animals/${id}/alerts/${alertId}`),
   getWeights: (id) => api.get(`/animals/${id}/weights`),
   getLatestWeight: (id) => api.get(`/animals/${id}/weights/latest`),
-  addWeight: (id, data) => api.post(`/animals/${id}/weights`, data),
+  addWeight: (id, data, idempotencyKey) =>
+    api.post(`/animals/${id}/weights`, data, idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined),
   // Species
   listSpecies: () => api.get('/animals/species'),
   createSpecies: (data) => api.post('/animals/species', data),
@@ -126,7 +130,8 @@ export const appointmentsAPI = {
 export const medicalAPI = {
   listRecords: (params) => api.get('/medical/records', { params }),
   getRecord: (id) => api.get(`/medical/records/${id}`),
-  createRecord: (data) => api.post('/medical/records', data),
+  createRecord: (data, idempotencyKey) =>
+    api.post('/medical/records', data, idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined),
   uploadAttachment: (recordId, formData) =>
     api.post(`/medical/records/${recordId}/attachments`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

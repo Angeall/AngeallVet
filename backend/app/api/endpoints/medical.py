@@ -10,6 +10,9 @@ from app.api.deps import get_tenant_db
 from app.core.config import settings
 from app.core.security import get_current_user, require_roles
 from app.core.tenancy import tenant_from_request
+from app.core.idempotency import (
+    idempotency_key_header, replayed_entity_id, remember_entity,
+)
 from app.models.user import User, UserRole
 from app.models.medical import (
     MedicalRecord, ConsultationTemplate, ConsultationTemplateProduct, Prescription,
@@ -113,9 +116,17 @@ def list_records(
 @router.post("/records", response_model=MedicalRecordResponse, status_code=201)
 def create_record(
     data: MedicalRecordCreate,
+    idem_key: Optional[str] = Depends(idempotency_key_header),
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.VETERINARIAN)),
 ):
+    # Replay from the offline queue: return the original record, never a duplicate.
+    prior_id = replayed_entity_id(db, idem_key, "medical_record")
+    if prior_id is not None:
+        existing = db.query(MedicalRecord).filter(MedicalRecord.id == prior_id).first()
+        if existing:
+            return _enrich_record(existing, db)
+
     record_data = data.model_dump(exclude={"prescriptions", "weight_kg", "home_treatment_products", "onsite_treatment_products"})
     record = MedicalRecord(**record_data, veterinarian_id=current_user.id)
     db.add(record)
@@ -166,6 +177,7 @@ def create_record(
         )
         db.add(mrp)
 
+    remember_entity(db, idem_key, "medical_record", record.id)
     db.commit()
     db.refresh(record)
     return _enrich_record(record, db)

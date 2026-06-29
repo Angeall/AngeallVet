@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { pb, USERS_COLLECTION } from '../services/pocketbase';
 import { authAPI, setAppToken } from '../services/api';
+import { clearOfflineCache } from '../services/queryClient';
 
 const AuthContext = createContext(null);
 
@@ -26,8 +27,12 @@ export function AuthProvider({ children }) {
             'Session PocketBase non rétablie:',
             err?.response?.data?.detail || err.message
           );
-          setAppToken(null);
-          pb.authStore.clear();
+          // Hors ligne / erreur réseau : on garde la session pour la reprise au
+          // retour du réseau ; on ne déconnecte que sur un vrai refus serveur.
+          if (err?.response) {
+            setAppToken(null);
+            pb.authStore.clear();
+          }
         })
         .finally(() => {
           if (active) setLoading(false);
@@ -64,6 +69,8 @@ export function AuthProvider({ children }) {
     pb.authStore.clear();
     setAppToken(null);
     setUser(null);
+    // Purge du cache hors ligne : aucune donnée patient ne reste au repos.
+    await clearOfflineCache();
   };
 
   return (

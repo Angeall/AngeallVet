@@ -17,6 +17,7 @@ from app.models.hospitalization import Hospitalization, CareTask
 from app.models.settings import ClinicSettings, VatRate
 from app.models.controlled_substance import ControlledSubstanceEntry
 from app.models.association import Association
+from app.models.idempotency import IdempotencyKey
 
 __all__ = [
     "Tenant", "User", "Client", "Animal", "AnimalAlert", "WeightRecord",
@@ -30,4 +31,5 @@ __all__ = [
     "ClinicSettings", "VatRate",
     "ControlledSubstanceEntry",
     "Association",
+    "IdempotencyKey",
 ]

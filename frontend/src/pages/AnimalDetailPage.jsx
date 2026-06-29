@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { animalsAPI, medicalAPI, hospitalizationAPI, billingAPI, inventoryAPI, communicationsAPI, appointmentsAPI } from '../services/api';
+import { animalsAPI, medicalAPI, hospitalizationAPI, billingAPI, inventoryAPI, communicationsAPI } from '../services/api';
+import { useAnimalDetail, useCreateMedicalRecord, useAddWeight } from '../hooks/useAnimalDetail';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
 
 export default function AnimalDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [animal, setAnimal] = useState(null);
-  const [weights, setWeights] = useState([]);
-  const [records, setRecords] = useState([]);
-  const [templates, setTemplates] = useState([]);
-  const [hospitalizations, setHospitalizations] = useState([]);
-  const [appointments, setAppointments] = useState([]);
+  const { data: detail, refetch } = useAnimalDetail(id);
+  const animal = detail?.animal ?? null;
+  const weights = detail?.weights ?? [];
+  const records = detail?.records ?? [];
+  const templates = detail?.templates ?? [];
+  const hospitalizations = detail?.hospitalizations ?? [];
+  const appointments = detail?.appointments ?? [];
+  const { submitRecord } = useCreateMedicalRecord(id, animal?.name);
+  const { addWeight: submitWeight } = useAddWeight(id, animal?.name);
   const [tab, setTab] = useState('medical');
   const [newWeight, setNewWeight] = useState('');
   const [showRecordForm, setShowRecordForm] = useState(false);
@@ -43,33 +47,18 @@ export default function AnimalDetailPage() {
   const [htProductSearch, setHtProductSearch] = useState('');
   const [htProductResults, setHtProductResults] = useState([]);
 
-  const load = async () => {
-    try {
-      const [aRes, wRes, rRes, tRes, hRes, apptRes] = await Promise.all([
-        animalsAPI.get(id),
-        animalsAPI.getWeights(id),
-        medicalAPI.listRecords({ animal_id: id }),
-        medicalAPI.listTemplates({}),
-        hospitalizationAPI.list({ animal_id: id }),
-        appointmentsAPI.list({ animal_id: id }),
-      ]);
-      setAnimal(aRes.data);
-      setWeights(wRes.data);
-      setRecords(rRes.data);
-      setTemplates(tRes.data);
-      setHospitalizations(hRes.data);
-      setAppointments(apptRes.data);
-      setEditForm({
-        name: aRes.data.name, species: aRes.data.species, breed: aRes.data.breed || '',
-        sex: aRes.data.sex, date_of_birth: aRes.data.date_of_birth || '', color: aRes.data.color || '',
-        microchip_number: aRes.data.microchip_number || '', tattoo_number: aRes.data.tattoo_number || '',
-        is_neutered: aRes.data.is_neutered, vital_status: aRes.data.vital_status || 'alive',
-        vital_status_date: aRes.data.vital_status_date || '', notes: aRes.data.notes || '',
-      });
-    } catch { toast.error('Erreur de chargement'); }
-  };
-
-  useEffect(() => { load(); }, [id]);
+  // Renseigne le formulaire d'édition à partir des données chargées (cache inclus).
+  useEffect(() => {
+    if (!animal) return;
+    setEditForm({
+      name: animal.name, species: animal.species, breed: animal.breed || '',
+      sex: animal.sex, date_of_birth: animal.date_of_birth || '', color: animal.color || '',
+      microchip_number: animal.microchip_number || '', tattoo_number: animal.tattoo_number || '',
+      is_neutered: animal.is_neutered, vital_status: animal.vital_status || 'alive',
+      vital_status_date: animal.vital_status_date || '', notes: animal.notes || '',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animal?.id]);
 
   useEffect(() => {
     animalsAPI.listSpecies().then(res => setSpeciesList(res.data || [])).catch(() => {});
@@ -128,14 +117,11 @@ export default function AnimalDetailPage() {
     setHtProducts(prev => { const u = [...prev]; u[idx] = { ...u[idx], [field]: value }; return u; });
   };
 
-  const addWeight = async (e) => {
+  const handleAddWeight = (e) => {
     e.preventDefault();
     if (!newWeight) return;
-    try {
-      await animalsAPI.addWeight(id, { weight_kg: parseFloat(newWeight) });
-      const wRes = await animalsAPI.getWeights(id);
-      setWeights(wRes.data); setNewWeight(''); toast.success('Poids enregistre');
-    } catch { toast.error('Erreur'); }
+    submitWeight(parseFloat(newWeight));
+    setNewWeight('');
   };
 
   const applyTemplate = async (templateId) => {
@@ -163,27 +149,42 @@ export default function AnimalDetailPage() {
     }
   };
 
-  const handleRecordSubmit = async (e) => {
+  const handleRecordSubmit = (e) => {
     e.preventDefault();
-    try {
-      const payload = {
-        ...recordForm, animal_id: parseInt(id),
-        weight_kg: recordForm.weight_kg ? parseFloat(recordForm.weight_kg) : null,
-        appointment_id: recordForm.appointment_id || null,
-        onsite_treatment_products: onsiteProducts.map(p => ({ product_id: p.product_id, quantity: p.quantity, lot_number: p.lot_number || null })),
-        home_treatment_products: htProducts.map(p => ({ product_id: p.product_id, quantity: p.quantity, lot_number: p.lot_number || null })),
-      };
-      await medicalAPI.createRecord(payload);
-      toast.success('Dossier medical cree'); setShowRecordForm(false);
-      setRecordForm({ record_type: 'consultation', context: '', subjective: '', objective: '', assessment: '', plan: '', home_treatment: '', pharmacy_prescription: '', notes: '', weight_kg: '', appointment_id: null });
-      setOnsiteProducts([]); setHtProducts([]);
-      const [rRes, wRes] = await Promise.all([
-        medicalAPI.listRecords({ animal_id: id }),
-        animalsAPI.getWeights(id),
-      ]);
-      setRecords(rRes.data);
-      setWeights(wRes.data);
-    } catch { toast.error('Erreur lors de la creation'); }
+    const payload = {
+      ...recordForm, animal_id: parseInt(id),
+      weight_kg: recordForm.weight_kg ? parseFloat(recordForm.weight_kg) : null,
+      appointment_id: recordForm.appointment_id || null,
+      onsite_treatment_products: onsiteProducts.map(p => ({ product_id: p.product_id, quantity: p.quantity, lot_number: p.lot_number || null })),
+      home_treatment_products: htProducts.map(p => ({ product_id: p.product_id, quantity: p.quantity, lot_number: p.lot_number || null })),
+    };
+    // Dossier optimiste : il s'affiche immédiatement, même hors ligne. La file
+    // d'attente l'enverra (avec sa clé d'idempotence) au retour du réseau.
+    const tmpId = `tmp-${Date.now()}`;
+    const optimisticRecord = {
+      id: tmpId,
+      animal_id: parseInt(id),
+      record_type: recordForm.record_type,
+      context: recordForm.context,
+      subjective: recordForm.subjective,
+      objective: recordForm.objective,
+      assessment: recordForm.assessment,
+      plan: recordForm.plan,
+      home_treatment: recordForm.home_treatment,
+      pharmacy_prescription: recordForm.pharmacy_prescription,
+      notes: recordForm.notes,
+      appointment_id: recordForm.appointment_id || null,
+      created_at: new Date().toISOString(),
+      home_treatment_products: [
+        ...onsiteProducts.map(p => ({ product_id: p.product_id, product_name: p.name, quantity: p.quantity, lot_number: p.lot_number || null, treatment_location: 'onsite' })),
+        ...htProducts.map(p => ({ product_id: p.product_id, product_name: p.name, quantity: p.quantity, lot_number: p.lot_number || null, treatment_location: 'home' })),
+      ],
+      __optimistic: true,
+    };
+    submitRecord(payload, optimisticRecord);
+    setShowRecordForm(false);
+    setRecordForm({ record_type: 'consultation', context: '', subjective: '', objective: '', assessment: '', plan: '', home_treatment: '', pharmacy_prescription: '', notes: '', weight_kg: '', appointment_id: null });
+    setOnsiteProducts([]); setHtProducts([]);
   };
 
   const handleCreateInvoiceFromRecord = async (recordId) => {
@@ -217,29 +218,29 @@ export default function AnimalDetailPage() {
     e.preventDefault();
     try {
       await hospitalizationAPI.create({ animal_id: parseInt(id), reason: hospForm.reason, cage_number: hospForm.cage_number || null });
-      toast.success('Animal hospitalise'); setShowHospForm(false); setHospForm({ reason: '', cage_number: '' }); load();
+      toast.success('Animal hospitalise'); setShowHospForm(false); setHospForm({ reason: '', cage_number: '' }); refetch();
     } catch { toast.error('Erreur'); }
   };
 
   const handleDischarge = async () => {
     if (!activeHosp) return;
-    try { await hospitalizationAPI.update(activeHosp.id, { status: 'discharged' }); toast.success('Animal sorti'); load(); } catch { toast.error('Erreur'); }
+    try { await hospitalizationAPI.update(activeHosp.id, { status: 'discharged' }); toast.success('Animal sorti'); refetch(); } catch { toast.error('Erreur'); }
   };
 
   const handleAlertSubmit = async (e) => {
     e.preventDefault();
-    try { await animalsAPI.addAlert(id, alertForm); toast.success('Alerte ajoutee'); setShowAlertForm(false); setAlertForm({ alert_type: 'allergy', message: '', severity: 'warning' }); load(); } catch { toast.error('Erreur'); }
+    try { await animalsAPI.addAlert(id, alertForm); toast.success('Alerte ajoutee'); setShowAlertForm(false); setAlertForm({ alert_type: 'allergy', message: '', severity: 'warning' }); refetch(); } catch { toast.error('Erreur'); }
   };
 
   const removeAlert = async (alertId) => {
-    try { await animalsAPI.removeAlert(id, alertId); toast.success('Alerte supprimee'); load(); } catch { toast.error('Erreur'); }
+    try { await animalsAPI.removeAlert(id, alertId); toast.success('Alerte supprimee'); refetch(); } catch { toast.error('Erreur'); }
   };
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
       await animalsAPI.update(id, { ...editForm, date_of_birth: editForm.date_of_birth || null, microchip_number: editForm.microchip_number || null, tattoo_number: editForm.tattoo_number || null, vital_status_date: editForm.vital_status_date || null, is_deceased: editForm.vital_status === 'deceased', notes: editForm.notes || null });
-      toast.success('Animal mis a jour'); setShowEditForm(false); load();
+      toast.success('Animal mis a jour'); setShowEditForm(false); refetch();
     } catch { toast.error('Erreur'); }
   };
 
@@ -511,7 +512,7 @@ export default function AnimalDetailPage() {
 
       {tab === 'weight' && (
         <div className="card">
-          <div className="card-header"><h3 className="card-title">Courbe de poids</h3><form onSubmit={addWeight} style={{ display: 'flex', gap: '8px' }}><input type="number" step="0.01" className="form-input" style={{ width: '120px' }} placeholder="Poids (kg)" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} /><button type="submit" className="btn btn-primary btn-sm">Ajouter</button></form></div>
+          <div className="card-header"><h3 className="card-title">Courbe de poids</h3><form onSubmit={handleAddWeight} style={{ display: 'flex', gap: '8px' }}><input type="number" step="0.01" className="form-input" style={{ width: '120px' }} placeholder="Poids (kg)" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} /><button type="submit" className="btn btn-primary btn-sm">Ajouter</button></form></div>
           {weightChartData.length > 0 ? (<ResponsiveContainer width="100%" height={300}><LineChart data={weightChartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis unit=" kg" /><Tooltip /><Line type="monotone" dataKey="poids" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4 }} /></LineChart></ResponsiveContainer>) : <p style={{ color: 'var(--gray-400)', textAlign: 'center' }}>Aucune donnee de poids</p>}
         </div>
       )}
@@ -719,7 +720,7 @@ export default function AnimalDetailPage() {
                         <p style={{ whiteSpace: 'pre-wrap', margin: '4px 0', fontSize: '0.85rem' }}>{r.pharmacy_prescription}</p>
                       </div>
                     )}
-                    {allProds.length > 0 && (
+                    {!r.__optimistic && allProds.length > 0 && (
                       (r.invoice_id || createdInvoices[r.id]) ? (
                         <Link to={`/invoices/${r.invoice_id || createdInvoices[r.id]}`} className="btn btn-success btn-sm" style={{ marginTop: '8px', textDecoration: 'none' }}>
                           Facture creee
