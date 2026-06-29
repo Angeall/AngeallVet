@@ -4,7 +4,6 @@ import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 
@@ -88,11 +87,12 @@ app.include_router(settings_endpoints.router, prefix=API_PREFIX)
 app.include_router(controlled_substances.router, prefix=API_PREFIX)
 app.include_router(associations.router, prefix=API_PREFIX)
 
-# Serve uploads
+# Ensure the upload directory exists. Files are NOT exposed via a public static
+# mount: medical attachments are sensitive (RGPD) and are streamed through an
+# authenticated endpoint instead (see endpoints/medical.py).
 upload_dir = settings.UPLOAD_DIR
 if not os.path.exists(upload_dir):
     os.makedirs(upload_dir, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
 
 
 def _ensure_schema(db_engine):
@@ -126,12 +126,12 @@ def _ensure_schema(db_engine):
         ("medical_record_products", "lot_number", "ALTER TABLE medical_record_products ADD COLUMN lot_number VARCHAR(100)"),
         ("medical_records", "pharmacy_prescription", "ALTER TABLE medical_records ADD COLUMN pharmacy_prescription TEXT"),
         ("medical_records", "context", "ALTER TABLE medical_records ADD COLUMN context TEXT"),
-        # PocketBase auth / sub-domain tenancy (central registry)
+        # PocketBase auth / sub-domain tenancy (central registry).
+        # Secret columns (database_url, pb_admin_password) are managed by
+        # migration 008 (pgcrypto); auth_jwt_secret is no longer stored.
         ("tenants", "subdomain", "ALTER TABLE tenants ADD COLUMN subdomain VARCHAR(100)"),
         ("tenants", "pocketbase_url", "ALTER TABLE tenants ADD COLUMN pocketbase_url VARCHAR(500)"),
         ("tenants", "pb_admin_email", "ALTER TABLE tenants ADD COLUMN pb_admin_email VARCHAR(255)"),
-        ("tenants", "pb_admin_password", "ALTER TABLE tenants ADD COLUMN pb_admin_password VARCHAR(255)"),
-        ("tenants", "auth_jwt_secret", "ALTER TABLE tenants ADD COLUMN auth_jwt_secret VARCHAR(255)"),
     ]
 
     # Column renames that create_all won't perform on pre-existing tables.
@@ -160,6 +160,23 @@ def _ensure_schema(db_engine):
 
 @app.on_event("startup")
 def on_startup():
+    # 0. Fail closed on insecure production configuration.
+    _insecure_secrets = {
+        "",
+        "dev-secret-key",
+        "change-me-to-a-random-secret-key-in-production",
+    }
+    _is_prod = settings.APP_ENV.lower() not in ("development", "dev", "local", "test")
+    if _is_prod and settings.APP_SECRET_KEY in _insecure_secrets:
+        raise RuntimeError(
+            "APP_SECRET_KEY must be set to a strong, unique value in production "
+            "(it derives every tenant's JWT signing secret)."
+        )
+    if _is_prod and not settings.ENCRYPTION_KEY:
+        logger.warning(
+            "⚠ ENCRYPTION_KEY non défini — les secrets des tenants ne seront PAS chiffrés au repos."
+        )
+
     # 1. Ensure central database schema is up to date (tables + missing columns)
     try:
         _ensure_schema(engine)

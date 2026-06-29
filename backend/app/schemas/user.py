@@ -68,6 +68,21 @@ class RolePermissionResponse(BaseModel):
         from_attributes = True
 
 
+# Tenants (registry) — safe projection, never exposes secrets
+# (database_url, pb_admin_password, auth_jwt_secret).
+class TenantResponse(BaseModel):
+    id: int
+    name: str
+    slug: str
+    subdomain: Optional[str] = None
+    pocketbase_url: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # Notifications
 class NotificationResponse(BaseModel):
     id: int

@@ -1,6 +1,7 @@
 import os
 import uuid as uuid_mod
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 from decimal import Decimal
@@ -8,6 +9,7 @@ from decimal import Decimal
 from app.api.deps import get_tenant_db
 from app.core.config import settings
 from app.core.security import get_current_user, require_roles
+from app.core.tenancy import tenant_from_request
 from app.models.user import User, UserRole
 from app.models.medical import (
     MedicalRecord, ConsultationTemplate, ConsultationTemplateProduct, Prescription,
@@ -209,6 +211,7 @@ def create_invoice_from_record(
 @router.post("/records/{record_id}/attachments", response_model=AttachmentResponse)
 def upload_attachment(
     record_id: int,
+    request: Request,
     file: UploadFile = File(...),
     description: Optional[str] = None,
     db: Session = Depends(get_tenant_db),
@@ -218,15 +221,20 @@ def upload_attachment(
     if not record:
         raise HTTPException(status_code=404, detail="Dossier medical non trouve")
 
-    upload_dir = os.path.join(settings.UPLOAD_DIR, "medical", str(record_id))
+    # Per-tenant storage so attachments are never shared across tenants.
+    tenant = tenant_from_request(request)
+    upload_dir = os.path.join(settings.UPLOAD_DIR, tenant.slug, "medical", str(record_id))
     os.makedirs(upload_dir, exist_ok=True)
 
     ext = os.path.splitext(file.filename)[1] if file.filename else ""
     stored_name = f"{uuid_mod.uuid4()}{ext}"
     file_path = os.path.join(upload_dir, stored_name)
 
-    content = file.file.read()
-    if len(content) > settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024:
+    # Read at most the allowed size (+1 byte) so an oversized upload can't
+    # exhaust memory before the size check.
+    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    content = file.file.read(max_bytes + 1)
+    if len(content) > max_bytes:
         raise HTTPException(status_code=413, detail="Fichier trop volumineux")
 
     with open(file_path, "wb") as f:
@@ -247,6 +255,36 @@ def upload_attachment(
     db.commit()
     db.refresh(attachment)
     return attachment
+
+
+@router.get("/attachments/{attachment_id}")
+def download_attachment(
+    attachment_id: int,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Stream a medical attachment to an authenticated user of this tenant.
+
+    Files are served here (not via a public static mount) and forced as a
+    download to prevent inline rendering / stored XSS. The attachment row lives
+    in the tenant DB, so cross-tenant access is structurally impossible.
+    """
+    att = db.query(Attachment).filter(Attachment.id == attachment_id).first()
+    if not att:
+        raise HTTPException(status_code=404, detail="Piece jointe non trouvee")
+
+    # Defense-in-depth: never serve a path outside the upload directory.
+    base = os.path.realpath(settings.UPLOAD_DIR)
+    real = os.path.realpath(att.file_path)
+    if not (real == base or real.startswith(base + os.sep)) or not os.path.exists(real):
+        raise HTTPException(status_code=404, detail="Fichier introuvable")
+
+    return FileResponse(
+        real,
+        filename=att.file_name,
+        media_type="application/octet-stream",
+        content_disposition_type="attachment",
+    )
 
 
 # --- Templates ---

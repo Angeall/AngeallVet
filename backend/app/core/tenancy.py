@@ -97,7 +97,7 @@ def _context_from_tenant(t) -> TenantContext:
         pocketbase_url=t.pocketbase_url or settings.POCKETBASE_URL,
         pb_admin_email=t.pb_admin_email or settings.POCKETBASE_ADMIN_EMAIL,
         pb_admin_password=t.pb_admin_password or settings.POCKETBASE_ADMIN_PASSWORD,
-        jwt_secret=t.auth_jwt_secret or derive_tenant_secret(t.slug),
+        jwt_secret=derive_tenant_secret(t.slug),
         is_default=False,
     )
 

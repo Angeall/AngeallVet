@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.core.database import get_central_db, get_request_db, init_tenant_database
-from app.core.security import get_current_user, require_roles, create_app_token
+from app.core.security import get_current_user, require_roles, require_platform_admin, create_app_token
 from app.core.tenancy import tenant_from_request
 from app.core.pocketbase import (
     pb_auth_with_password,
@@ -16,7 +16,7 @@ from app.models.user import User, UserRole, RolePermission, Notification, DEFAUL
 from app.models.tenant import Tenant
 from app.schemas.user import (
     UserCreate, UserUpdate, UserResponse, LoginRequest, TokenResponse, SessionRequest,
-    RolePermissionUpdate, RolePermissionResponse, NotificationResponse,
+    RolePermissionUpdate, RolePermissionResponse, NotificationResponse, TenantResponse,
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -36,7 +36,10 @@ def _link_or_get_user(db: Session, record: dict) -> Optional[User]:
     user = db.query(User).filter(User.pb_user_id == pb_uid).first()
     if user:
         return user
-    if email:
+    # Migration relink by email — ONLY when PocketBase reports the email as
+    # verified. A non-superuser cannot self-set verified=true, so this blocks
+    # account takeover via public PocketBase sign-up with a victim's email.
+    if email and record.get("verified") is True:
         existing = db.query(User).filter(User.email == email).first()
         if existing:
             existing.pb_user_id = pb_uid
@@ -335,16 +338,16 @@ def mark_all_read(
 # Tenants live in the CENTRAL registry database (not tenant DBs).
 # We use get_central_db here explicitly.
 
-@router.get("/tenants")
+@router.get("/tenants", response_model=list[TenantResponse])
 def list_tenants(
     db: Session = Depends(get_central_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    _: bool = Depends(require_platform_admin),
 ):
-    """List all tenants (super-admin only)."""
+    """List all tenants (platform super-admin only)."""
     return db.query(Tenant).order_by(Tenant.name).all()
 
 
-@router.post("/tenants", status_code=201)
+@router.post("/tenants", status_code=201, response_model=TenantResponse)
 def create_tenant(
     name: str,
     slug: str,
@@ -354,7 +357,7 @@ def create_tenant(
     pb_admin_email: Optional[str] = None,
     pb_admin_password: Optional[str] = None,
     db: Session = Depends(get_central_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    _: bool = Depends(require_platform_admin),
 ):
     """Create a new tenant with its own database + PocketBase instance.
 
@@ -392,7 +395,7 @@ def create_tenant(
     return tenant
 
 
-@router.put("/tenants/{tenant_id}")
+@router.put("/tenants/{tenant_id}", response_model=TenantResponse)
 def update_tenant(
     tenant_id: int,
     name: Optional[str] = None,
@@ -400,7 +403,7 @@ def update_tenant(
     subdomain: Optional[str] = None,
     pocketbase_url: Optional[str] = None,
     db: Session = Depends(get_central_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    _: bool = Depends(require_platform_admin),
 ):
     """Update a tenant."""
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
@@ -424,7 +427,7 @@ def assign_user_to_tenant(
     tenant_id: int,
     user_id: int,
     db: Session = Depends(get_central_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    _: bool = Depends(require_platform_admin),
 ):
     """Assign a user to a tenant (registry-level bookkeeping)."""
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()

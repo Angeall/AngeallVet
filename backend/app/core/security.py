@@ -5,11 +5,12 @@ that token (see ``endpoints/auth``) for an *application JWT* signed with the
 tenant's secret. This module mints and verifies those application JWTs and
 exposes the ``get_current_user`` / ``require_roles`` dependencies.
 """
+import hmac
 import logging
 import time
 
 import jwt
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -92,3 +93,20 @@ def require_roles(*roles):
             )
         return current_user
     return role_checker
+
+
+def require_platform_admin(x_platform_admin_token: str = Header(default="")):
+    """Guard for cross-tenant registry endpoints.
+
+    Requires the ``X-Platform-Admin-Token`` header to match the configured
+    ``PLATFORM_ADMIN_TOKEN``. This is a PLATFORM-level credential, deliberately
+    separate from the per-tenant ADMIN role: a clinic admin must never be able
+    to read or manage other tenants. Fails closed when no token is configured.
+    """
+    expected = settings.PLATFORM_ADMIN_TOKEN
+    if not expected or not hmac.compare_digest(x_platform_admin_token or "", expected):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès plateforme refusé",
+        )
+    return True

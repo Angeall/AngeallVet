@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     AUTH_JWT_ALGORITHM: str = "HS256"
     AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: int = 720  # 12h
 
+    # Platform (super-admin) token guarding the cross-tenant registry endpoints
+    # (/auth/tenants*). MUST be set to use those endpoints; empty = disabled.
+    # This is distinct from per-tenant ADMIN role so a clinic admin can never
+    # read or manage other tenants.
+    PLATFORM_ADMIN_TOKEN: str = ""
+
     # Email
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
