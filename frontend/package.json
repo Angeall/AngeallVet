@@ -3,28 +3,29 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "@fullcalendar/daygrid": "^6.1.15",
-    "@fullcalendar/interaction": "^6.1.15",
-    "@fullcalendar/react": "^6.1.15",
-    "@fullcalendar/timegrid": "^6.1.15",
-    "@supabase/supabase-js": "^2.49.1",
-    "axios": "^1.7.9",
-    "date-fns": "^4.1.0",
+    "@fullcalendar/daygrid": "^6.1.21",
+    "@fullcalendar/interaction": "^6.1.21",
+    "@fullcalendar/react": "^6.1.21",
+    "@fullcalendar/timegrid": "^6.1.21",
+    "axios": "^1.18.1",
+    "date-fns": "^4.4.0",
     "lucide-react": "^0.468.0",
+    "pocketbase": "^0.27.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-hot-toast": "^2.4.1",
-    "react-router-dom": "^6.28.0",
-    "recharts": "^2.15.0"
+    "react-hot-toast": "^2.6.0",
+    "react-router-dom": "^6.30.4",
+    "recharts": "^2.15.4"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^6.0.1",
+    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@vitejs/plugin-react": "^6.0.3",
     "jsdom": "^28.1.0",
-    "vite": "^8.0.0",
-    "vitest": "^4.1.0"
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9"
   },
   "scripts": {
     "dev": "vite",
@@ -32,6 +33,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
   }
 }
