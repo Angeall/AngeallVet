@@ -19,27 +19,38 @@ Application métier complète pour cliniques vétérinaires. Gestion des patient
 
 - **Backend**: Python 3.12, FastAPI, SQLAlchemy 2, PostgreSQL
 - **Frontend**: React 18, React Router, Recharts, FullCalendar
-- **Auth**: Supabase Auth (JWT, sessions, MFA-ready), RBAC local
-- **Infra**: Docker Compose
+- **Auth**: PocketBase **tenant-local** (1 instance par tenant) + JWT applicatif signé par tenant, RBAC local
+- **Multi-tenant**: résolution par sous-domaine, base PostgreSQL dédiée par tenant
+- **Infra**: Docker Compose + reverse-proxy Caddy
 
 ## Démarrage Rapide
 
-### Prérequis : Supabase
+### Avec Docker (recommandé)
 
-1. Créer un projet sur [supabase.com](https://supabase.com)
-2. Récupérer dans **Settings > API** :
-   - `SUPABASE_URL` (Project URL)
-   - `SUPABASE_ANON_KEY` (anon public key)
-   - `SUPABASE_SERVICE_ROLE_KEY` (service_role key)
-   - `SUPABASE_JWT_SECRET` (JWT Secret, dans Settings > API > JWT Settings)
-
-### Avec Docker
+Tout est orchestré par Docker Compose : PostgreSQL, **PocketBase** (auth), le
+backend, le frontend et un reverse-proxy **Caddy** qui assure la résolution des
+tenants par sous-domaine.
 
 ```bash
 cp .env.example .env
-# Remplir les clés Supabase dans .env
-docker-compose up -d
+# Ajuster APP_SECRET_KEY, DB_PASSWORD, POCKETBASE_ADMIN_* et INITIAL_ADMIN_* dans .env
+docker compose up -d
 ```
+
+Au premier démarrage, tout est automatique :
+- PocketBase crée son **superuser** à partir de `POCKETBASE_ADMIN_EMAIL` / `POCKETBASE_ADMIN_PASSWORD` ;
+- le backend crée le **compte admin initial** (`INITIAL_ADMIN_*`) si la base est vide.
+
+> Migration depuis une base existante (ère Supabase) : les utilisateurs déjà en base sont reliés à PocketBase **par email** à la première connexion. Il faut donc (re)créer leurs comptes côté PocketBase (admin UI `http://localhost:8090/_/` ou API superuser) avec le même email.
+
+Accès :
+- Application : `http://app.angeallvet.localhost` (tenant par défaut)
+- Un tenant : `http://<slug>.angeallvet.localhost`
+- PocketBase admin : `http://localhost:8090/_/`
+
+> Les navigateurs résolvent automatiquement `*.localhost` vers `127.0.0.1`.
+> En production, remplacez `:80` par votre domaine dans le `Caddyfile`
+> (TLS automatique) et déclarez chaque tenant dans la table `tenants`.
 
 ### Sans Docker
 
@@ -58,6 +69,8 @@ uvicorn app.main:app --reload
 ```bash
 cd frontend
 npm install
+# Dev direct (sans reverse-proxy) : viser les services locaux
+printf "VITE_API_URL=http://localhost:8000/api/v1\nVITE_POCKETBASE_URL=http://localhost:8090\n" > .env.local
 npm start
 ```
 
@@ -122,9 +135,12 @@ AngeallVet/
 Toutes les variables de configuration sont dans `.env.example`. Copier vers `.env` et ajuster avant déploiement.
 
 Variables clés :
-- `DATABASE_URL` : Connexion PostgreSQL (base applicative, pas la base Supabase)
-- `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_JWT_SECRET` : Auth Supabase
-- `REACT_APP_SUPABASE_URL` / `REACT_APP_SUPABASE_ANON_KEY` : Auth côté frontend
+- `DATABASE_URL` : Connexion PostgreSQL (base du tenant par défaut / registre `tenants`)
+- `APP_SECRET_KEY` : secret racine dont dérive le secret JWT de chaque tenant
+- `POCKETBASE_URL` : URL interne de PocketBase (tenant par défaut)
+- `POCKETBASE_ADMIN_EMAIL` / `POCKETBASE_ADMIN_PASSWORD` : superuser PocketBase utilisé par le backend pour gérer les utilisateurs
+- `BASE_DOMAIN` / `DEFAULT_TENANT_SLUG` : résolution des tenants par sous-domaine
+- `VITE_API_URL` / `VITE_POCKETBASE_URL` (frontend) : endpoints API et PocketBase (vides derrière Caddy = même origine)
 - `SMTP_*` : Configuration email pour les rappels
 - `SMS_*` : Configuration SMS (Twilio)
 - `STRIPE_*` : Intégration paiement
@@ -135,5 +151,5 @@ Variables clés :
 - Chiffrement des données sensibles configurable via `ENCRYPTION_KEY`
 - Rétention des données configurable via `DATA_RETENTION_YEARS`
 - Suppression logique (soft delete) des clients
-- Journalisation des accès via les tokens JWT Supabase
-- Authentification déléguée à Supabase (pas de stockage local de mots de passe)
+- Journalisation des accès via les JWT applicatifs (signés par tenant)
+- Authentification déléguée à PocketBase **tenant-local** (mots de passe jamais stockés par l'application ; ségrégation des identités par tenant)
