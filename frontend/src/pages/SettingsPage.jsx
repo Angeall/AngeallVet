@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { settingsAPI, animalsAPI, medicalAPI, inventoryAPI, authAPI } from '../services/api';
+import { settingsAPI, animalsAPI, medicalAPI, inventoryAPI, authAPI, exportsAPI } from '../services/api';
+import { downloadBlob } from '../services/download';
 import toast from 'react-hot-toast';
 
 export default function SettingsPage() {
@@ -417,12 +418,26 @@ export default function SettingsPage() {
     }
   };
 
+  const handleBackup = async () => {
+    try {
+      toast.loading('Generation de la sauvegarde...', { id: 'backup' });
+      const res = await exportsAPI.backup();
+      downloadBlob(res, 'backup_angeallvet.xlsx');
+      toast.success('Sauvegarde telechargee', { id: 'backup' });
+    } catch {
+      toast.error('Erreur lors de la sauvegarde', { id: 'backup' });
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
         <div className="page-header-left">
           <h1 className="page-title">Parametres</h1>
           <p className="page-subtitle">Configuration du cabinet veterinaire</p>
+        </div>
+        <div className="page-header-actions">
+          <button className="btn btn-secondary" onClick={handleBackup}>Sauvegarde Excel (backup)</button>
         </div>
       </div>
 

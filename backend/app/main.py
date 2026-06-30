@@ -12,7 +12,7 @@ from app.core.database import Base, _default_engine as engine, _default_session_
 from app.api.endpoints import (
     auth, clients, animals, appointments,
     medical, inventory, billing, communication, hospitalization,
-    controlled_substances, associations, billing_rules,
+    controlled_substances, associations, billing_rules, exports,
 )
 from app.api.endpoints import settings as settings_endpoints
 
@@ -85,6 +85,7 @@ app.include_router(medical.router, prefix=API_PREFIX)
 app.include_router(inventory.router, prefix=API_PREFIX)
 app.include_router(billing.router, prefix=API_PREFIX)
 app.include_router(billing_rules.router, prefix=API_PREFIX)
+app.include_router(exports.router, prefix=API_PREFIX)
 app.include_router(communication.router, prefix=API_PREFIX)
 app.include_router(hospitalization.router, prefix=API_PREFIX)
 app.include_router(settings_endpoints.router, prefix=API_PREFIX)

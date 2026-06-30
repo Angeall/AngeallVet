@@ -229,6 +229,12 @@ export const controlledSubstancesAPI = {
   exportRegister: (params) => api.get('/controlled-substances/register/export', { params, responseType: 'blob' }),
 };
 
+// Excel exports
+export const exportsAPI = {
+  xlsx: (data) => api.post('/export/xlsx', data, { responseType: 'blob' }),
+  backup: () => api.get('/export/backup', { responseType: 'blob' }),
+};
+
 // Veterinarian commission rules (admin)
 export const commissionsAPI = {
   listRules: () => api.get('/billing/rules'),

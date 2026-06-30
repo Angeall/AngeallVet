@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { billingAPI } from '../services/api';
+import { billingAPI, exportsAPI } from '../services/api';
+import { downloadBlob } from '../services/download';
 import toast from 'react-hot-toast';
 
 export default function DebtsPage() {
@@ -24,6 +25,15 @@ export default function DebtsPage() {
 
   const totalOutstanding = filtered.reduce((s, d) => s + d.outstanding, 0);
 
+  const exportDebts = async () => {
+    const sheets = [{
+      title: 'Dettes', headers: ['Client', 'Email', 'Telephone', 'Factures', 'Total du', 'Deja paye', 'Reste a payer'],
+      rows: filtered.map(d => [`${d.last_name} ${d.first_name}`, d.email || '', d.phone || '', d.invoice_count, d.total_due, d.total_paid, d.outstanding]),
+    }];
+    try { downloadBlob(await exportsAPI.xlsx({ filename: 'dettes_clients', sheets }), 'dettes.xlsx'); }
+    catch { toast.error('Erreur lors de l\'export'); }
+  };
+
   if (loading) return <div className="page-content">Chargement...</div>;
 
   return (
@@ -34,6 +44,9 @@ export default function DebtsPage() {
           <span style={{ color: 'var(--gray-400)', fontSize: '0.85rem' }}>
             {filtered.length} client{filtered.length > 1 ? 's' : ''} avec solde impaye
           </span>
+        </div>
+        <div className="page-header-actions">
+          <button className="btn btn-secondary" onClick={exportDebts}>Exporter Excel</button>
         </div>
       </div>
 

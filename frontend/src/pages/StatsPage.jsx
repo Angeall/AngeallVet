@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { billingAPI, authAPI, commissionsAPI } from '../services/api';
+import { billingAPI, authAPI, commissionsAPI, exportsAPI } from '../services/api';
+import { downloadBlob } from '../services/download';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -92,6 +93,42 @@ export default function StatsPage() {
   const vetUnpaid = vetTotal - vetPaid;
   const vetPaidCount = vetInvoices.filter(inv => inv.status === 'paid').length;
 
+  const exportGlobal = async () => {
+    if (!stats) return;
+    const sheets = [
+      { title: 'Synthese', headers: ['Indicateur', 'Periode', 'Precedent'], rows: [
+        ['CA TTC', stats.current.total_revenue, stats.previous.total_revenue],
+        ['Encaisse', stats.current.total_paid, stats.previous.total_paid],
+        ['Impaye', stats.current.total_unpaid, stats.previous.total_unpaid],
+        ['Factures', stats.current.invoice_count, stats.previous.invoice_count],
+        ['Factures payees', stats.current.paid_count, stats.previous.paid_count],
+      ] },
+      { title: 'Par jour', headers: ['Date', 'CA', 'Encaisse', 'Factures'], rows: (stats.daily || []).map(d => [d.date, d.revenue, d.paid, d.count]) },
+      { title: 'Par statut', headers: ['Statut', 'Montant'], rows: Object.entries(stats.current.by_status || {}).map(([k, v]) => [statusLabelMap[k] || k, v]) },
+      { title: 'Modes de paiement', headers: ['Mode', 'Montant'], rows: Object.entries(stats.by_payment_method || {}).map(([k, v]) => [methodLabel(k), v]) },
+    ];
+    try { downloadBlob(await exportsAPI.xlsx({ filename: `stats_${stats.start}_${stats.end}`, sheets }), 'stats.xlsx'); }
+    catch { toast.error('Erreur lors de l\'export'); }
+  };
+
+  const exportVet = async () => {
+    const sheets = [
+      { title: 'Factures', headers: ['N', 'Date', 'Client', 'Veterinaires', 'Total TTC', 'Paye', 'Statut'], rows: vetInvoices.map(inv => [
+        inv.invoice_number, inv.issue_date, inv.client_name || '',
+        (inv.veterinarians || []).map(v => v.user_name || `#${v.user_id}`).join(', '),
+        parseFloat(inv.total || 0), parseFloat(inv.amount_paid || 0), statusLabelMap[inv.status] || inv.status,
+      ]) },
+    ];
+    if (isAdmin && commissions) {
+      sheets.push({ title: 'Commissions', headers: ['Veterinaire', 'Encaisse', 'Commission'], rows: commissions.veterinarians.map(v => [v.name, v.paid, v.commission]) });
+      const detail = [];
+      commissions.veterinarians.forEach(v => v.by_day.forEach(d => detail.push([v.name, d.date, d.rule_name || '', d.paid, d.commission])));
+      sheets.push({ title: 'Commissions par jour', headers: ['Veterinaire', 'Jour', 'Regle', 'Encaisse', 'Commission'], rows: detail });
+    }
+    try { downloadBlob(await exportsAPI.xlsx({ filename: `facturation_${vetDateFrom}_${vetDateTo}`, sheets }), 'facturation.xlsx'); }
+    catch { toast.error('Erreur lors de l\'export'); }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -115,6 +152,7 @@ export default function StatsPage() {
                 {periodLabels[p]}
               </button>
             ))}
+            <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto' }} onClick={exportGlobal}>Exporter Excel</button>
           </div>
 
           {!stats ? <p>Chargement...</p> : <GlobalStatsView stats={stats} />}
@@ -142,6 +180,7 @@ export default function StatsPage() {
                 <label className="form-label">Au</label>
                 <input type="date" className="form-input" value={vetDateTo} onChange={(e) => setVetDateTo(e.target.value)} />
               </div>
+              <button className="btn btn-secondary" style={{ marginLeft: 'auto' }} onClick={exportVet}>Exporter Excel</button>
             </div>
           </div>
 
