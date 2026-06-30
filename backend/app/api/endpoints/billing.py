@@ -566,7 +566,9 @@ def get_stats(
             Invoice.issue_date <= d_end,
         ).all()
 
-        total_revenue = sum(float(inv.total or 0) for inv in invoices)
+        total_revenue = sum(float(inv.total or 0) for inv in invoices)       # TTC / TVAC
+        total_ht = sum(float(inv.subtotal or 0) for inv in invoices)         # HT / HTVA
+        total_vat = sum(float(inv.total_vat or 0) for inv in invoices)       # TVA
         total_paid = sum(float(inv.amount_paid or 0) for inv in invoices)
         total_unpaid = total_revenue - total_paid
         count = len(invoices)
@@ -579,7 +581,10 @@ def get_stats(
             by_status[s] = by_status.get(s, 0) + float(inv.total or 0)
 
         return {
-            "total_revenue": round(total_revenue, 2),
+            "total_revenue": round(total_revenue, 2),   # TVAC (kept for back-compat)
+            "total_ht": round(total_ht, 2),             # HTVA
+            "total_ttc": round(total_revenue, 2),       # TVAC (explicit alias)
+            "total_vat": round(total_vat, 2),
             "total_paid": round(total_paid, 2),
             "total_unpaid": round(total_unpaid, 2),
             "invoice_count": count,
@@ -598,10 +603,12 @@ def get_stats(
             Invoice.issue_date == day_cursor,
         ).all()
         day_revenue = sum(float(inv.total or 0) for inv in day_invoices)
+        day_revenue_ht = sum(float(inv.subtotal or 0) for inv in day_invoices)
         day_paid = sum(float(inv.amount_paid or 0) for inv in day_invoices)
         daily.append({
             "date": day_cursor.isoformat(),
-            "revenue": round(day_revenue, 2),
+            "revenue": round(day_revenue, 2),        # TTC / TVAC
+            "revenue_ht": round(day_revenue_ht, 2),  # HT / HTVA
             "paid": round(day_paid, 2),
             "count": len(day_invoices),
         })

@@ -72,3 +72,15 @@ def test_list_unpaid(client, auth_headers, sample_client):
     assert response.status_code == 200
     # Draft invoices are not in unpaid list
     assert isinstance(response.json(), list)
+
+
+def test_stats_reports_ht_ttc_vat(client, auth_headers, sample_client):
+    """The billing stats expose HTVA, TVAC and VAT totals for the period."""
+    client.post("/api/v1/billing/invoices", headers=auth_headers, json={
+        "client_id": sample_client["id"],
+        "lines": [{"description": "Consultation", "quantity": 1, "unit_price": 100.00, "vat_rate": 21.00}],
+    })
+    cur = client.get("/api/v1/billing/stats", headers=auth_headers, params={"period": "month"}).json()["current"]
+    assert cur["total_ht"] == 100.0
+    assert cur["total_ttc"] == 121.0
+    assert cur["total_vat"] == 21.0

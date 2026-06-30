@@ -97,13 +97,15 @@ export default function StatsPage() {
     if (!stats) return;
     const sheets = [
       { title: 'Synthese', headers: ['Indicateur', 'Periode', 'Precedent'], rows: [
-        ['CA TTC', stats.current.total_revenue, stats.previous.total_revenue],
+        ['CA HTVA', stats.current.total_ht ?? 0, stats.previous.total_ht ?? 0],
+        ['CA TVAC', stats.current.total_revenue, stats.previous.total_revenue],
+        ['TVA', stats.current.total_vat ?? 0, stats.previous.total_vat ?? 0],
         ['Encaisse', stats.current.total_paid, stats.previous.total_paid],
         ['Impaye', stats.current.total_unpaid, stats.previous.total_unpaid],
         ['Factures', stats.current.invoice_count, stats.previous.invoice_count],
         ['Factures payees', stats.current.paid_count, stats.previous.paid_count],
       ] },
-      { title: 'Par jour', headers: ['Date', 'CA', 'Encaisse', 'Factures'], rows: (stats.daily || []).map(d => [d.date, d.revenue, d.paid, d.count]) },
+      { title: 'Par jour', headers: ['Date', 'CA HTVA', 'CA TVAC', 'Encaisse', 'Factures'], rows: (stats.daily || []).map(d => [d.date, d.revenue_ht ?? 0, d.revenue, d.paid, d.count]) },
       { title: 'Par statut', headers: ['Statut', 'Montant'], rows: Object.entries(stats.current.by_status || {}).map(([k, v]) => [statusLabelMap[k] || k, v]) },
       { title: 'Modes de paiement', headers: ['Mode', 'Montant'], rows: Object.entries(stats.by_payment_method || {}).map(([k, v]) => [methodLabel(k), v]) },
     ];
@@ -122,7 +124,10 @@ export default function StatsPage() {
     if (isAdmin && commissions) {
       sheets.push({ title: 'Commissions', headers: ['Veterinaire', 'Encaisse', 'Commission'], rows: commissions.veterinarians.map(v => [v.name, v.paid, v.commission]) });
       const detail = [];
-      commissions.veterinarians.forEach(v => v.by_day.forEach(d => detail.push([v.name, d.date, d.rule_name || '', d.paid, d.commission])));
+      commissions.veterinarians.forEach(v => {
+        v.by_day.forEach(d => detail.push([v.name, d.date, d.rule_name || '', d.paid, d.commission]));
+        (v.bonuses || []).forEach(b => detail.push([v.name, '', `Bonus palier (${b.rule_name})`, b.base, b.amount]));
+      });
       sheets.push({ title: 'Commissions par jour', headers: ['Veterinaire', 'Jour', 'Regle', 'Encaisse', 'Commission'], rows: detail });
     }
     try { downloadBlob(await exportsAPI.xlsx({ filename: `facturation_${vetDateFrom}_${vetDateTo}`, sheets }), 'facturation.xlsx'); }
@@ -237,6 +242,17 @@ export default function StatsPage() {
                         ))}
                       </tbody>
                     </table>
+                    {(v.bonuses || []).map((b, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', background: 'var(--blue-50, #eff6ff)', borderRadius: '6px', padding: '6px 10px', marginTop: '6px' }}>
+                        <span>
+                          Bonus palier — <strong>{b.rule_name}</strong>
+                          <span style={{ color: 'var(--gray-500)', marginLeft: '6px' }}>
+                            ({b.basis === 'profit' ? 'bénéfice' : 'CA'} global {b.base.toFixed(2)} EUR)
+                          </span>
+                        </span>
+                        <span style={{ fontWeight: 600 }}>+ {b.amount.toFixed(2)} EUR</span>
+                      </div>
+                    ))}
                   </div>
                 ))
               )}
@@ -335,11 +351,18 @@ function GlobalStatsView({ stats }) {
     <>
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-icon green">CA</div>
+          <div className="stat-icon green">HT</div>
+          <div>
+            <div className="stat-value">{(cur.total_ht ?? 0).toFixed(2)} EUR</div>
+            <div className="stat-label">CA HTVA</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon green">TTC</div>
           <div>
             <div className="stat-value">{cur.total_revenue.toFixed(2)} EUR</div>
             <div className="stat-label">
-              Chiffre d'affaires
+              CA TVAC
               {revenueChange !== null && (
                 <span style={{ marginLeft: '6px', color: parseFloat(revenueChange) >= 0 ? '#10b981' : '#ef4444', fontSize: '0.8rem' }}>
                   {parseFloat(revenueChange) >= 0 ? '+' : ''}{revenueChange}%
@@ -375,7 +398,8 @@ function GlobalStatsView({ stats }) {
       <div className="card">
         <h3 className="card-title" style={{ marginBottom: '16px' }}>Comparaison avec la periode precedente</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-          <CompareBlock label="CA" current={cur.total_revenue} previous={prev.total_revenue} unit=" EUR" />
+          <CompareBlock label="CA HTVA" current={cur.total_ht ?? 0} previous={prev.total_ht ?? 0} unit=" EUR" />
+          <CompareBlock label="CA TVAC" current={cur.total_revenue} previous={prev.total_revenue} unit=" EUR" />
           <CompareBlock label="Encaisse" current={cur.total_paid} previous={prev.total_paid} unit=" EUR" />
           <CompareBlock label="Factures" current={cur.invoice_count} previous={prev.invoice_count} unit="" />
           <CompareBlock label="Factures payees" current={cur.paid_count} previous={prev.paid_count} unit="" />
@@ -441,10 +465,22 @@ function GlobalStatsView({ stats }) {
           </thead>
           <tbody>
             <tr>
-              <td><strong>Chiffre d'affaires TTC</strong></td>
+              <td><strong>Chiffre d'affaires HTVA</strong></td>
+              <td>{(cur.total_ht ?? 0).toFixed(2)} EUR</td>
+              <td>{(prev.total_ht ?? 0).toFixed(2)} EUR</td>
+              <td>{variationBadge(cur.total_ht ?? 0, prev.total_ht ?? 0)}</td>
+            </tr>
+            <tr>
+              <td><strong>Chiffre d'affaires TVAC</strong></td>
               <td>{cur.total_revenue.toFixed(2)} EUR</td>
               <td>{prev.total_revenue.toFixed(2)} EUR</td>
               <td>{variationBadge(cur.total_revenue, prev.total_revenue)}</td>
+            </tr>
+            <tr>
+              <td><strong>dont TVA</strong></td>
+              <td>{(cur.total_vat ?? 0).toFixed(2)} EUR</td>
+              <td>{(prev.total_vat ?? 0).toFixed(2)} EUR</td>
+              <td>{variationBadge(cur.total_vat ?? 0, prev.total_vat ?? 0)}</td>
             </tr>
             <tr>
               <td><strong>Montant encaisse</strong></td>
