@@ -72,6 +72,31 @@ def line_commission(line, component, product) -> Decimal:
     return ZERO
 
 
+def tier_line_base(line, product, basis: str) -> Decimal:
+    """The base a line contributes to a tier rule: HT revenue, or margin (profit)."""
+    line_total = _d(line.line_total)  # HT, after discount
+    if basis == "profit":
+        cost = _d(product.purchase_price) * _d(line.quantity) if product else ZERO
+        return line_total - cost
+    return line_total  # revenue
+
+
+def tier_bonus(tiers, base: Decimal) -> Decimal:
+    """Flat amount for the bracket the base falls into.
+
+    Tiers are ordered by ``up_to`` ascending (NULL = top bracket, sorted last);
+    the first tier with ``base <= up_to`` (or the NULL/top tier) wins. A base
+    above every finite threshold with no NULL tier falls back to the highest.
+    """
+    ordered = sorted(tiers, key=lambda t: (t.up_to is None, _d(t.up_to)))
+    if not ordered:
+        return ZERO
+    for t in ordered:
+        if t.up_to is None or base <= _d(t.up_to):
+            return _d(t.amount)
+    return _d(ordered[-1].amount)
+
+
 def resolve_rule_id(db: Session, user: User, on_date) -> Optional[int]:
     """The rule that applies to a vet on a date: day override > program slot > none."""
     override = (
@@ -123,7 +148,8 @@ def compute_commissions(db: Session, date_from, date_to, veterinarian_id: Option
             return None
         if rid not in rule_cache:
             rule_cache[rid] = (
-                db.query(BillingRule).options(selectinload(BillingRule.components))
+                db.query(BillingRule)
+                .options(selectinload(BillingRule.components), selectinload(BillingRule.tiers))
                 .filter(BillingRule.id == rid).first()
             )
         return rule_cache[rid]
@@ -140,6 +166,9 @@ def compute_commissions(db: Session, date_from, date_to, veterinarian_id: Option
         return resolve_cache[key]
 
     agg = {}
+    # Tier rules accrue a global base per (vet, rule); the flat bonus is applied
+    # once, after the period is fully accumulated.
+    tier_acc = {}
 
     for p in payments:
         inv = inv_map.get(p.invoice_id)
@@ -162,15 +191,25 @@ def compute_commissions(db: Session, date_from, date_to, veterinarian_id: Option
                 continue
             rid = resolve(user, p.payment_date)
             rule = get_rule(rid)
-            components = rule.components if rule else []
+            paid_share = _d(p.amount) * share
 
             commission = ZERO
-            for line in inv.lines:
-                product = products.get(line.product_id)
-                comp = pick_component(components, line, line_category(line, product))
-                commission += line_commission(line, comp, product)
-            commission = commission * fraction * share
-            paid_share = _d(p.amount) * share
+            if rule is not None and rule.rule_type == "tier":
+                # Accrue the global base (HT revenue or margin) on the encaissé;
+                # the bracket bonus is applied once after the loop.
+                basis = rule.tier_basis or "revenue"
+                base = ZERO
+                for line in inv.lines:
+                    base += tier_line_base(line, products.get(line.product_id), basis)
+                ta = tier_acc.setdefault((iv.user_id, rid), {"base": ZERO, "rule": rule})
+                ta["base"] += base * fraction * share
+            else:
+                components = rule.components if rule else []
+                for line in inv.lines:
+                    product = products.get(line.product_id)
+                    comp = pick_component(components, line, line_category(line, product))
+                    commission += line_commission(line, comp, product)
+                commission = commission * fraction * share
 
             a = agg.setdefault(iv.user_id, {
                 "user_id": iv.user_id,
@@ -188,6 +227,22 @@ def compute_commissions(db: Session, date_from, date_to, veterinarian_id: Option
             d["commission"] += commission
             d["paid"] += paid_share
 
+    # Apply the tier bonuses now the global base per (vet, rule) is complete.
+    for (uid, rid), ta in tier_acc.items():
+        a = agg.get(uid)
+        if a is None:
+            continue
+        rule = ta["rule"]
+        bonus = tier_bonus(rule.tiers, ta["base"])
+        a["commission"] += bonus
+        a.setdefault("bonuses", []).append({
+            "rule_id": rid,
+            "rule_name": rule.name,
+            "basis": rule.tier_basis or "revenue",
+            "base": round(float(ta["base"]), 2),
+            "amount": round(float(bonus), 2),
+        })
+
     vets_out = []
     grand = ZERO
     for a in agg.values():
@@ -197,6 +252,7 @@ def compute_commissions(db: Session, date_from, date_to, veterinarian_id: Option
             "name": a["name"],
             "commission": round(float(a["commission"]), 2),
             "paid": round(float(a["paid"]), 2),
+            "bonuses": a.get("bonuses", []),
             "by_day": sorted(
                 ({**d, "commission": round(float(d["commission"]), 2), "paid": round(float(d["paid"]), 2)}
                  for d in a["by_day"].values()),

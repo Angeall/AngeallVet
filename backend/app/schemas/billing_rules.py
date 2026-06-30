@@ -17,11 +17,24 @@ class ComponentResponse(ComponentBase):
     id: int
 
 
+class TierBase(BaseModel):
+    up_to: Optional[float] = None    # null = top bracket ("and above")
+    amount: float = 0.0
+
+
+class TierResponse(TierBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
 class RuleCreate(BaseModel):
     name: str
     description: Optional[str] = None
     is_active: bool = True
+    rule_type: str = "components"     # components | tier
+    tier_basis: Optional[str] = None  # tier rules: revenue | profit
     components: list[ComponentBase] = []
+    tiers: list[TierBase] = []
 
 
 class RuleResponse(BaseModel):
@@ -30,7 +43,10 @@ class RuleResponse(BaseModel):
     name: str
     description: Optional[str] = None
     is_active: bool
+    rule_type: str = "components"
+    tier_basis: Optional[str] = None
     components: list[ComponentResponse] = []
+    tiers: list[TierResponse] = []
 
 
 # --- Programs ---

@@ -11,8 +11,8 @@ from app.core.security import require_roles
 from app.core.commissions import compute_commissions
 from app.models.user import User, UserRole
 from app.models.billing_rules import (
-    BillingRule, BillingRuleComponent, BillingProgram, BillingProgramDay,
-    BillingDayOverride,
+    BillingRule, BillingRuleComponent, BillingRuleTier, BillingProgram,
+    BillingProgramDay, BillingDayOverride,
 )
 from app.schemas.billing_rules import (
     RuleCreate, RuleResponse, ProgramCreate, ProgramResponse,
@@ -32,7 +32,7 @@ def list_rules(
 ):
     return (
         db.query(BillingRule)
-        .options(selectinload(BillingRule.components))
+        .options(selectinload(BillingRule.components), selectinload(BillingRule.tiers))
         .order_by(BillingRule.name)
         .all()
     )
@@ -44,11 +44,16 @@ def create_rule(
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(_admin),
 ):
-    rule = BillingRule(name=data.name, description=data.description, is_active=data.is_active)
+    rule = BillingRule(
+        name=data.name, description=data.description, is_active=data.is_active,
+        rule_type=data.rule_type, tier_basis=data.tier_basis,
+    )
     db.add(rule)
     db.flush()
     for c in data.components:
         db.add(BillingRuleComponent(rule_id=rule.id, **c.model_dump()))
+    for t in data.tiers:
+        db.add(BillingRuleTier(rule_id=rule.id, **t.model_dump()))
     db.commit()
     db.refresh(rule)
     return rule
@@ -67,9 +72,14 @@ def update_rule(
     rule.name = data.name
     rule.description = data.description
     rule.is_active = data.is_active
+    rule.rule_type = data.rule_type
+    rule.tier_basis = data.tier_basis
     db.query(BillingRuleComponent).filter(BillingRuleComponent.rule_id == rule_id).delete()
+    db.query(BillingRuleTier).filter(BillingRuleTier.rule_id == rule_id).delete()
     for c in data.components:
         db.add(BillingRuleComponent(rule_id=rule_id, **c.model_dump()))
+    for t in data.tiers:
+        db.add(BillingRuleTier(rule_id=rule_id, **t.model_dump()))
     db.commit()
     db.refresh(rule)
     return rule

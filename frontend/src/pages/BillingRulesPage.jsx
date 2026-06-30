@@ -5,10 +5,13 @@ import toast from 'react-hot-toast';
 const SCOPES = { all: 'Tout', category: 'Catégorie', product: 'Produit précis' };
 const PRODUCT_TYPES = { medication: 'Médicament', food: 'Aliment', supply: 'Fourniture', service: 'Acte' };
 const BASES = { profit: '% du bénéfice', revenue: '% du CA', per_unit: 'Forfait / unité (€)', per_line: 'Forfait / ligne (€)' };
+const RULE_TYPES = { components: 'Composants (par ligne)', tier: 'Échelons (CA / bénéfice global)' };
+const TIER_BASES = { revenue: 'CA global (HT encaissé)', profit: 'Bénéfice global (marge encaissée)' };
 const WEEKDAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
 const emptyComponent = () => ({ scope: 'all', product_type: 'medication', product_id: null, basis: 'revenue', value: 0 });
-const emptyRule = () => ({ name: '', description: '', is_active: true, components: [emptyComponent()] });
+const emptyTier = () => ({ up_to: '', amount: 0 });
+const emptyRule = () => ({ name: '', description: '', is_active: true, rule_type: 'components', tier_basis: 'revenue', components: [emptyComponent()], tiers: [emptyTier()] });
 
 export default function BillingRulesPage() {
   const [rules, setRules] = useState([]);
@@ -41,26 +44,43 @@ export default function BillingRulesPage() {
 
   // ── Rule form ──
   const startRule = (rule) => setRuleForm(rule
-    ? { id: rule.id, name: rule.name, description: rule.description || '', is_active: rule.is_active, components: rule.components.length ? rule.components.map((c) => ({ ...c })) : [emptyComponent()] }
+    ? {
+        id: rule.id, name: rule.name, description: rule.description || '', is_active: rule.is_active,
+        rule_type: rule.rule_type || 'components',
+        tier_basis: rule.tier_basis || 'revenue',
+        components: rule.components.length ? rule.components.map((c) => ({ ...c })) : [emptyComponent()],
+        tiers: (rule.tiers && rule.tiers.length) ? rule.tiers.map((t) => ({ up_to: t.up_to ?? '', amount: t.amount })) : [emptyTier()],
+      }
     : emptyRule());
 
   const setComp = (idx, patch) => setRuleForm((f) => ({ ...f, components: f.components.map((c, i) => (i === idx ? { ...c, ...patch } : c)) }));
   const addComp = () => setRuleForm((f) => ({ ...f, components: [...f.components, emptyComponent()] }));
   const removeComp = (idx) => setRuleForm((f) => ({ ...f, components: f.components.filter((_, i) => i !== idx) }));
 
+  const setTier = (idx, patch) => setRuleForm((f) => ({ ...f, tiers: f.tiers.map((t, i) => (i === idx ? { ...t, ...patch } : t)) }));
+  const addTier = () => setRuleForm((f) => ({ ...f, tiers: [...f.tiers, emptyTier()] }));
+  const removeTier = (idx) => setRuleForm((f) => ({ ...f, tiers: f.tiers.filter((_, i) => i !== idx) }));
+
   const saveRule = async (e) => {
     e.preventDefault();
+    const isTier = ruleForm.rule_type === 'tier';
     const payload = {
       name: ruleForm.name,
       description: ruleForm.description || null,
       is_active: ruleForm.is_active,
-      components: ruleForm.components.map((c) => ({
+      rule_type: ruleForm.rule_type,
+      tier_basis: isTier ? ruleForm.tier_basis : null,
+      components: isTier ? [] : ruleForm.components.map((c) => ({
         scope: c.scope,
         product_type: c.scope === 'category' ? c.product_type : null,
         product_id: c.scope === 'product' ? (c.product_id ? parseInt(c.product_id) : null) : null,
         basis: c.basis,
         value: parseFloat(c.value) || 0,
       })),
+      tiers: isTier ? ruleForm.tiers.map((t) => ({
+        up_to: (t.up_to === '' || t.up_to === null) ? null : parseFloat(t.up_to),
+        amount: parseFloat(t.amount) || 0,
+      })) : [],
     };
     try {
       if (ruleForm.id) await commissionsAPI.updateRule(ruleForm.id, payload);
@@ -144,6 +164,14 @@ export default function BillingRulesPage() {
               </div>
             </div>
 
+            <div className="form-group" style={{ maxWidth: '300px' }}>
+              <label className="form-label">Type de règle</label>
+              <select className="form-select" value={ruleForm.rule_type} onChange={(e) => setRuleForm({ ...ruleForm, rule_type: e.target.value })}>
+                {Object.entries(RULE_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+
+            {ruleForm.rule_type === 'components' && (<>
             <label className="form-label" style={{ marginTop: '8px' }}>Composants</label>
             {ruleForm.components.map((c, idx) => (
               <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', marginBottom: '8px', flexWrap: 'wrap' }}>
@@ -186,6 +214,36 @@ export default function BillingRulesPage() {
               </div>
             ))}
             <button type="button" className="btn btn-secondary btn-sm" onClick={addComp} style={{ marginBottom: '12px' }}>+ Composant</button>
+            </>)}
+
+            {ruleForm.rule_type === 'tier' && (<>
+              <div className="form-group" style={{ maxWidth: '320px' }}>
+                <label className="form-label">Base des échelons</label>
+                <select className="form-select" value={ruleForm.tier_basis} onChange={(e) => setRuleForm({ ...ruleForm, tier_basis: e.target.value })}>
+                  {Object.entries(TIER_BASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+              <label className="form-label" style={{ marginTop: '8px' }}>Échelons (forfait par tranche)</label>
+              {ruleForm.tiers.map((t, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  <div className="form-group" style={{ margin: 0, minWidth: '170px' }}>
+                    <label className="form-label">Jusqu'à (€)</label>
+                    <input type="number" step="0.01" className="form-input" placeholder="vide = au-delà" value={t.up_to} onChange={(e) => setTier(idx, { up_to: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ margin: 0, maxWidth: '120px' }}>
+                    <label className="form-label">Montant (€)</label>
+                    <input type="number" step="0.01" className="form-input" value={t.amount} onChange={(e) => setTier(idx, { amount: e.target.value })} />
+                  </div>
+                  {ruleForm.tiers.length > 1 && (
+                    <button type="button" className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} onClick={() => removeTier(idx)}>X</button>
+                  )}
+                </div>
+              ))}
+              <button type="button" className="btn btn-secondary btn-sm" onClick={addTier} style={{ marginBottom: '8px' }}>+ Échelon</button>
+              <p style={{ fontSize: '0.78rem', color: 'var(--gray-500)', margin: '0 0 12px' }}>
+                Bonus forfaitaire selon la tranche où tombe le {ruleForm.tier_basis === 'profit' ? 'bénéfice' : 'CA'} global du vétérinaire sur la période (encaissé). Laissez « Jusqu'à » vide pour la tranche supérieure (au-delà).
+              </p>
+            </>)}
             <div style={{ display: 'flex', gap: '8px' }}>
               <button type="submit" className="btn btn-primary">Enregistrer</button>
               <button type="button" className="btn btn-secondary" onClick={() => setRuleForm(null)}>Annuler</button>
@@ -195,18 +253,29 @@ export default function BillingRulesPage() {
 
         <div className="table-container">
           <table>
-            <thead><tr><th>Nom</th><th>Composants</th><th></th></tr></thead>
+            <thead><tr><th>Nom</th><th>Détail</th><th></th></tr></thead>
             <tbody>
               {rules.filter((r) => r.is_active).map((r) => (
                 <tr key={r.id}>
                   <td><strong>{r.name}</strong>{r.description && <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>{r.description}</div>}</td>
                   <td style={{ fontSize: '0.82rem', color: 'var(--gray-600)' }}>
-                    {r.components.map((c, i) => (
-                      <span key={i} className="badge badge-teal" style={{ marginRight: '4px' }}>
-                        {c.scope === 'product' ? (products.find((p) => p.id === c.product_id)?.name || 'Produit') : c.scope === 'category' ? PRODUCT_TYPES[c.product_type] : 'Tout'}
-                        {' · '}{BASES[c.basis].replace(' du', '').replace(' / ', '/')} {c.value}
-                      </span>
-                    ))}
+                    {r.rule_type === 'tier' ? (
+                      <>
+                        <span className="badge badge-blue" style={{ marginRight: '4px' }}>{TIER_BASES[r.tier_basis] || 'CA global'}</span>
+                        {[...(r.tiers || [])].sort((a, b) => (a.up_to ?? Infinity) - (b.up_to ?? Infinity)).map((t, i) => (
+                          <span key={i} className="badge badge-teal" style={{ marginRight: '4px' }}>
+                            {t.up_to != null ? `≤ ${t.up_to}€` : 'au-delà'} → {t.amount}€
+                          </span>
+                        ))}
+                      </>
+                    ) : (
+                      r.components.map((c, i) => (
+                        <span key={i} className="badge badge-teal" style={{ marginRight: '4px' }}>
+                          {c.scope === 'product' ? (products.find((p) => p.id === c.product_id)?.name || 'Produit') : c.scope === 'category' ? PRODUCT_TYPES[c.product_type] : 'Tout'}
+                          {' · '}{BASES[c.basis].replace(' du', '').replace(' / ', '/')} {c.value}
+                        </span>
+                      ))
+                    )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button className="btn btn-secondary btn-sm" onClick={() => startRule(r)}>Modifier</button>

@@ -28,10 +28,17 @@ class BillingRule(Base):
     name = Column(String(120), nullable=False)
     description = Column(String(500))
     is_active = Column(Boolean, default=True)
+    # "components": per-line scheme (the default). "tier": a flat bonus picked
+    # from brackets of the vet's global revenue/profit over the period.
+    rule_type = Column(String(20), nullable=False, default="components")
+    tier_basis = Column(String(20))  # tier rules: revenue | profit
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     components = relationship(
         "BillingRuleComponent", back_populates="rule", cascade="all, delete-orphan"
+    )
+    tiers = relationship(
+        "BillingRuleTier", back_populates="rule", cascade="all, delete-orphan"
     )
 
 
@@ -47,6 +54,21 @@ class BillingRuleComponent(Base):
     value = Column(Numeric(10, 2), nullable=False, default=0)
 
     rule = relationship("BillingRule", back_populates="components")
+
+
+class BillingRuleTier(Base):
+    """One bracket of a tier rule: pay ``amount`` when the vet's global
+    revenue/profit for the period is ``<= up_to``. ``up_to`` NULL = the top
+    bracket ("and above")."""
+
+    __tablename__ = "billing_rule_tiers"
+
+    id = Column(Integer, primary_key=True)
+    rule_id = Column(Integer, ForeignKey("billing_rules.id"), nullable=False, index=True)
+    up_to = Column(Numeric(12, 2))  # null = top bracket
+    amount = Column(Numeric(10, 2), nullable=False, default=0)
+
+    rule = relationship("BillingRule", back_populates="tiers")
 
 
 class BillingProgram(Base):

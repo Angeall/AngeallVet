@@ -131,6 +131,8 @@ def _ensure_schema(db_engine):
         ("users", "sidenav_color", "ALTER TABLE users ADD COLUMN sidenav_color VARCHAR(7)"),
         ("users", "billing_program_id", "ALTER TABLE users ADD COLUMN billing_program_id INTEGER"),
         ("users", "ical_token", "ALTER TABLE users ADD COLUMN ical_token VARCHAR(64)"),
+        ("billing_rules", "rule_type", "ALTER TABLE billing_rules ADD COLUMN rule_type VARCHAR(20) NOT NULL DEFAULT 'components'"),
+        ("billing_rules", "tier_basis", "ALTER TABLE billing_rules ADD COLUMN tier_basis VARCHAR(20)"),
         ("clinic_settings", "invoice_ninja_url", "ALTER TABLE clinic_settings ADD COLUMN invoice_ninja_url VARCHAR(500)"),
         ("clinic_settings", "invoice_ninja_token", "ALTER TABLE clinic_settings ADD COLUMN invoice_ninja_token VARCHAR(255)"),
         ("clients", "invoice_ninja_client_id", "ALTER TABLE clients ADD COLUMN invoice_ninja_client_id VARCHAR(64)"),
