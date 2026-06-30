@@ -132,6 +132,8 @@ def _ensure_schema(db_engine):
         ("clinic_settings", "invoice_ninja_token", "ALTER TABLE clinic_settings ADD COLUMN invoice_ninja_token VARCHAR(255)"),
         ("clients", "invoice_ninja_client_id", "ALTER TABLE clients ADD COLUMN invoice_ninja_client_id VARCHAR(64)"),
         ("invoices", "invoice_ninja_invoice_id", "ALTER TABLE invoices ADD COLUMN invoice_ninja_invoice_id VARCHAR(64)"),
+        ("clients", "accepts_reminders", "ALTER TABLE clients ADD COLUMN accepts_reminders BOOLEAN NOT NULL DEFAULT true"),
+        ("clients", "unsubscribe_token", "ALTER TABLE clients ADD COLUMN unsubscribe_token VARCHAR(64)"),
         ("invoices", "medical_record_id", "ALTER TABLE invoices ADD COLUMN medical_record_id INTEGER REFERENCES medical_records(id)"),
         ("invoice_lines", "lot_number", "ALTER TABLE invoice_lines ADD COLUMN lot_number VARCHAR(100)"),
         ("medical_record_products", "lot_number", "ALTER TABLE medical_record_products ADD COLUMN lot_number VARCHAR(100)"),
@@ -258,6 +260,14 @@ def on_startup():
         db.close()
     except Exception as e:
         logger.warning("Could not seed species: %s", e)
+
+    # 6. Background reminder scheduler (skipped under SQLite / tests).
+    if settings.ENABLE_SCHEDULER and not settings.DATABASE_URL.startswith("sqlite"):
+        try:
+            from app.core.scheduler import start_scheduler
+            start_scheduler()
+        except Exception as e:
+            logger.warning("Could not start reminder scheduler: %s", e)
 
     # 5. Seed initial admin user on first deployment (if no users exist)
     try:

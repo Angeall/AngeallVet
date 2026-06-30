@@ -1,14 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from typing import Optional
+from datetime import datetime
 
 from app.api.deps import get_tenant_db
-from app.core.security import get_current_user
-from app.models.user import User
+from app.core.database import get_request_db
+from app.core.security import get_current_user, require_roles
+from app.core.mailer import send_email, MailerError
+from app.core.sms import send_sms, SmsError
+from app.core.reminders import send_due_reminders
+from app.models.user import User, UserRole
 from app.models.communication import Communication, ReminderRule, ReminderLog
 from app.models.medical import MedicalRecord
 from app.models.animal import Animal
 from app.models.client import Client
+from app.models.settings import ClinicSettings
 from app.schemas.communication import (
     CommunicationCreate, CommunicationResponse,
     ReminderRuleCreate, ReminderRuleResponse,
@@ -40,15 +47,41 @@ def send_communication(
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
-    client_exists = db.query(Client).filter(Client.id == data.client_id).first()
-    if not client_exists:
+    client = db.query(Client).filter(Client.id == data.client_id).first()
+    if not client:
         raise HTTPException(status_code=404, detail="Client non trouve")
+
+    clinic = db.query(ClinicSettings).first()
     comm = Communication(**data.model_dump())
-    # In production, this would actually send via SMTP/SMS provider
-    comm.status = "sent"
+    status, error = "sent", None
+    try:
+        if data.channel == "email":
+            if not client.email:
+                raise MailerError("Le client n'a pas d'adresse e-mail")
+            send_email(
+                client.email, data.subject or "", data.body,
+                from_email=(clinic.email if clinic else None),
+                from_name=(clinic.clinic_name if clinic else None),
+            )
+        elif data.channel == "sms":
+            recipient = client.mobile or client.phone
+            if not recipient:
+                raise SmsError("Le client n'a pas de numéro de téléphone")
+            send_sms(recipient, data.body)
+        else:
+            raise HTTPException(status_code=400, detail="Canal non supporté (email ou sms)")
+    except (MailerError, SmsError) as exc:
+        status, error = "failed", str(exc)
+
+    comm.status = status
+    comm.error_message = error
+    if status == "sent":
+        comm.sent_at = datetime.utcnow()
     db.add(comm)
     db.commit()
     db.refresh(comm)
+    if status == "failed":
+        raise HTTPException(status_code=502, detail=f"Envoi échoué: {error}")
     return comm
 
 
@@ -182,3 +215,33 @@ def get_postal_due_reminders(
             })
 
     return results
+
+
+@router.post("/reminders/run")
+def run_reminders(
+    request: Request,
+    db: Session = Depends(get_tenant_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+):
+    """Manually trigger the due-reminder send for this tenant (also runs daily)."""
+    base = str(request.base_url).rstrip("/")
+    return send_due_reminders(db, base)
+
+
+@router.get("/unsubscribe/{token}")
+def unsubscribe(token: str, db: Session = Depends(get_request_db)):
+    """Public opt-out link embedded in reminder e-mails (no authentication)."""
+    client = db.query(Client).filter(Client.unsubscribe_token == token).first()
+    if not client:
+        return HTMLResponse(
+            "<html><body style='font-family:sans-serif;padding:2rem'>"
+            "<h3>Lien invalide ou expiré.</h3></body></html>",
+            status_code=404,
+        )
+    client.accepts_reminders = False
+    db.commit()
+    return HTMLResponse(
+        "<html><body style='font-family:sans-serif;padding:2rem'>"
+        "<h3>Désinscription confirmée.</h3>"
+        "<p>Vous ne recevrez plus de rappels automatiques de la clinique.</p></body></html>"
+    )

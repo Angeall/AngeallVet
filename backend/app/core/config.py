@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     SMS_API_SECRET: str = ""
     SMS_FROM_NUMBER: str = ""
 
+    # Background reminder scheduler. Disable on extra web workers to avoid
+    # duplicate sends (only one process should run the scheduler).
+    ENABLE_SCHEDULER: bool = True
+    REMINDER_HOUR: int = 8  # local hour the daily reminder job runs
+
     # Google Calendar
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""

@@ -193,6 +193,7 @@ export const communicationsAPI = {
   updateRule: (id, data) => api.put(`/communications/reminders/${id}`, data),
   deleteRule: (id) => api.delete(`/communications/reminders/${id}`),
   postalDueReminders: () => api.get('/communications/reminders/postal-due'),
+  runReminders: () => api.post('/communications/reminders/run'),
 };
 
 // Settings

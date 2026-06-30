@@ -41,8 +41,20 @@ export default function CommunicationsPage() {
       setShowForm(false);
       const res = await communicationsAPI.list({});
       setComms(res.data);
-    } catch {
-      toast.error('Erreur d\'envoi');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur d\'envoi');
+    }
+  };
+
+  const handleRunReminders = async () => {
+    try {
+      const res = await communicationsAPI.runReminders();
+      const { sent = 0, failed = 0, skipped = 0 } = res.data || {};
+      toast.success(`Rappels : ${sent} envoye(s), ${failed} echec(s), ${skipped} ignore(s)`);
+      const list = await communicationsAPI.list({});
+      setComms(list.data);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur lors de l\'envoi des rappels');
     }
   };
 
@@ -71,6 +83,7 @@ export default function CommunicationsPage() {
           <h1 className="page-title">Communications</h1>
         </div>
         <div className="page-header-actions">
+          <button className="btn btn-secondary" onClick={handleRunReminders}>Lancer les rappels</button>
           <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Envoyer un message</button>
         </div>
       </div>

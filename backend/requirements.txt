@@ -27,6 +27,7 @@ openpyxl==3.1.5
 # Communication
 httpx==0.28.1
 jinja2==3.1.6
+APScheduler==3.10.4
 
 # Testing
 pytest==8.3.4
