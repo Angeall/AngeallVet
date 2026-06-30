@@ -85,6 +85,9 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     google_calendar_token = Column(String(500))
+    # Secret token for this user's public iCal feed (google_calendar module).
+    # Unguessable; rotating it revokes any previously subscribed calendar.
+    ical_token = Column(String(64), index=True)
     sidenav_color = Column(String(7))  # hex color e.g. "#1e3a5f"
     # Default weekly commission program for this vet (see billing_rules models).
     billing_program_id = Column(Integer, ForeignKey("billing_programs.id"), nullable=True, index=True)

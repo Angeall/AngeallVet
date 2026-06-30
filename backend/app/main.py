@@ -13,6 +13,7 @@ from app.api.endpoints import (
     auth, clients, animals, appointments,
     medical, inventory, billing, communication, hospitalization,
     controlled_substances, associations, billing_rules, exports, invoice_sync,
+    agenda,
 )
 from app.api.endpoints import settings as settings_endpoints
 
@@ -92,6 +93,7 @@ app.include_router(hospitalization.router, prefix=API_PREFIX)
 app.include_router(settings_endpoints.router, prefix=API_PREFIX)
 app.include_router(controlled_substances.router, prefix=API_PREFIX)
 app.include_router(associations.router, prefix=API_PREFIX)
+app.include_router(agenda.router, prefix=API_PREFIX)
 
 # Ensure the upload directory exists. Files are NOT exposed via a public static
 # mount: medical attachments are sensitive (RGPD) and are streamed through an
@@ -128,6 +130,7 @@ def _ensure_schema(db_engine):
         ("controlled_substance_entries", "total_delivered", "ALTER TABLE controlled_substance_entries ADD COLUMN total_delivered NUMERIC(10,2)"),
         ("users", "sidenav_color", "ALTER TABLE users ADD COLUMN sidenav_color VARCHAR(7)"),
         ("users", "billing_program_id", "ALTER TABLE users ADD COLUMN billing_program_id INTEGER"),
+        ("users", "ical_token", "ALTER TABLE users ADD COLUMN ical_token VARCHAR(64)"),
         ("clinic_settings", "invoice_ninja_url", "ALTER TABLE clinic_settings ADD COLUMN invoice_ninja_url VARCHAR(500)"),
         ("clinic_settings", "invoice_ninja_token", "ALTER TABLE clinic_settings ADD COLUMN invoice_ninja_token VARCHAR(255)"),
         ("clients", "invoice_ninja_client_id", "ALTER TABLE clients ADD COLUMN invoice_ninja_client_id VARCHAR(64)"),
@@ -145,6 +148,7 @@ def _ensure_schema(db_engine):
         ("tenants", "subdomain", "ALTER TABLE tenants ADD COLUMN subdomain VARCHAR(100)"),
         ("tenants", "pocketbase_url", "ALTER TABLE tenants ADD COLUMN pocketbase_url VARCHAR(500)"),
         ("tenants", "pb_admin_email", "ALTER TABLE tenants ADD COLUMN pb_admin_email VARCHAR(255)"),
+        ("tenants", "license", "ALTER TABLE tenants ADD COLUMN license TEXT"),
     ]
 
     # Column renames that create_all won't perform on pre-existing tables.

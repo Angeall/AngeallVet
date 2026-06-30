@@ -131,6 +131,23 @@ export const appointmentsAPI = {
   waitingRoom: (params) => api.get('/appointments/waiting-room', { params }),
 };
 
+// Agenda — personal iCal feed + Google Calendar two-way sync (google_calendar module)
+export const agendaAPI = {
+  icalStatus: () => api.get('/agenda/ical'),
+  icalEnable: () => api.post('/agenda/ical/enable'),
+  icalRotate: () => api.post('/agenda/ical/rotate'),
+  icalDisable: () => api.delete('/agenda/ical'),
+  // Google OAuth (two-way)
+  googleStatus: () => api.get('/agenda/google/status'),
+  googleConnect: () => api.get('/agenda/google/connect'),
+  googleSync: () => api.post('/agenda/google/sync'),
+  googleDisconnect: () => api.delete('/agenda/google'),
+  externalEvents: (params) => api.get('/agenda/external-events', { params }),
+  // Sync conflicts
+  listConflicts: () => api.get('/agenda/conflicts'),
+  resolveConflict: (id, resolution) => api.post(`/agenda/conflicts/${id}/resolve`, { resolution }),
+};
+
 // Medical Records
 export const medicalAPI = {
   listRecords: (params) => api.get('/medical/records', { params }),

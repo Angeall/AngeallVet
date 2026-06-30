@@ -11,16 +11,26 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.core.config import settings
 from app.core.database import _default_session_factory, _get_tenant_session_factory
+from app.core.licensing import MODULE_GOOGLE_CALENDAR, resolve_modules
 from app.core.reminders import send_due_reminders
+from app.core.google_sync import sync_all_accounts
 
 logger = logging.getLogger(__name__)
 _scheduler = None
 
+GOOGLE_SYNC_INTERVAL_MINUTES = 15
 
-def run_all_tenants_reminders():
+
+def _tenant_targets():
+    """List ``(session_factory, base_url, modules)`` for every active tenant.
+
+    The default tenant reads its license from the env; registry tenants from
+    their row. Always includes the default tenant (central DB).
+    """
     from app.models.tenant import Tenant
 
-    targets = [(_default_session_factory, settings.APP_URL)]  # default tenant (central DB)
+    default_modules = resolve_modules(settings.DEFAULT_TENANT_SLUG, settings.LICENSE)
+    targets = [(_default_session_factory, settings.APP_URL, default_modules)]
     try:
         central = _default_session_factory()
         try:
@@ -31,20 +41,40 @@ def run_all_tenants_reminders():
                 sub = getattr(tenant, "subdomain", None)
                 if sub:
                     base = f"https://{sub}.{settings.BASE_DOMAIN}"
-                targets.append((_get_tenant_session_factory(tenant.database_url), base))
+                modules = resolve_modules(tenant.slug, getattr(tenant, "license", "") or "")
+                targets.append((_get_tenant_session_factory(tenant.database_url), base, modules))
         finally:
             central.close()
     except Exception as exc:
-        logger.warning("Reminder scheduler: could not list tenants: %s", exc)
+        logger.warning("Scheduler: could not list tenants: %s", exc)
+    return targets
 
-    for factory, base in targets:
+
+def run_all_tenants_reminders():
+    for factory, base, modules in _tenant_targets():
         db = factory()
         try:
-            counts = send_due_reminders(db, base)
+            counts = send_due_reminders(db, base, modules=modules)
             if counts.get("sent") or counts.get("failed"):
                 logger.info("Reminders (base=%s): %s", base, counts)
         except Exception as exc:
             logger.warning("Reminder run failed (base=%s): %s", base, exc)
+        finally:
+            db.close()
+
+
+def run_all_tenants_google_sync():
+    """Poll Google Calendar for every connected vet, in tenants that have the module."""
+    for factory, base, modules in _tenant_targets():
+        if MODULE_GOOGLE_CALENDAR not in modules:
+            continue
+        db = factory()
+        try:
+            totals = sync_all_accounts(db)
+            if totals.get("users"):
+                logger.info("Google sync (base=%s): %s", base, totals)
+        except Exception as exc:
+            logger.warning("Google sync failed (base=%s): %s", base, exc)
         finally:
             db.close()
 
@@ -58,5 +88,12 @@ def start_scheduler():
         run_all_tenants_reminders, "cron",
         hour=settings.REMINDER_HOUR, minute=0, id="daily_reminders",
     )
+    _scheduler.add_job(
+        run_all_tenants_google_sync, "interval",
+        minutes=GOOGLE_SYNC_INTERVAL_MINUTES, id="google_calendar_sync",
+    )
     _scheduler.start()
-    logger.info("Reminder scheduler started (daily at %02d:00)", settings.REMINDER_HOUR)
+    logger.info(
+        "Scheduler started (reminders daily at %02d:00, Google sync every %dmin)",
+        settings.REMINDER_HOUR, GOOGLE_SYNC_INTERVAL_MINUTES,
+    )

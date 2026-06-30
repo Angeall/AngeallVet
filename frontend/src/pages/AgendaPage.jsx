@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { appointmentsAPI, clientsAPI, animalsAPI, authAPI, settingsAPI } from '../services/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { appointmentsAPI, clientsAPI, animalsAPI, authAPI, settingsAPI, agendaAPI } from '../services/api';
 import { useOfflineMutation } from '../hooks/useOfflineMutation';
+import { useModules, useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 const typeColors = {
@@ -23,8 +24,18 @@ const statusColors = {
 };
 
 export default function AgendaPage() {
+  const { hasModule } = useModules();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [showForm, setShowForm] = useState(false);
+  // Google Calendar sync (iCal feed + OAuth two-way) — paid module.
+  const [showGoogleSync, setShowGoogleSync] = useState(false);
+  const [ical, setIcal] = useState(null);
+  const [icalBusy, setIcalBusy] = useState(false);
+  const [googleStatus, setGoogleStatus] = useState(null);
+  const [conflicts, setConflicts] = useState([]);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [defaultDuration, setDefaultDuration] = useState(30);
   const [durationManuallySet, setDurationManuallySet] = useState(false);
   const [form, setForm] = useState({
@@ -91,6 +102,15 @@ export default function AgendaPage() {
       if (filterVetId) params.veterinarian_id = parseInt(filterVetId);
       return appointmentsAPI.list(params).then((r) => r.data);
     },
+  });
+
+  // Imported Google busy blocks for the current vet (google_calendar module).
+  const { data: externalEvents = [] } = useQuery({
+    queryKey: ['external-events', selectedDate],
+    queryFn: () => agendaAPI
+      .externalEvents({ start: `${selectedDate}T00:00:00`, end: `${selectedDate}T23:59:59` })
+      .then((r) => r.data),
+    enabled: hasModule('google_calendar'),
   });
 
   const createAppt = useOfflineMutation({
@@ -272,6 +292,122 @@ export default function AgendaPage() {
   const todayStr = new Date().toISOString().slice(0, 10);
   const isToday = selectedDate === todayStr;
 
+  // Merge appointments with the current vet's imported Google busy blocks into one
+  // time-sorted schedule. Blocks only show when viewing "all" or the current vet.
+  const showBlocks = hasModule('google_calendar') && (!filterVetId || String(filterVetId) === String(user?.id));
+  const scheduleItems = [
+    ...appointments.map((a) => ({ kind: 'appt', start: a.start_time, data: a })),
+    ...(showBlocks ? externalEvents : []).map((b) => ({ kind: 'block', start: b.start_time, data: b })),
+  ].sort((x, y) => new Date(x.start) - new Date(y.start));
+
+  const loadGoogle = async () => {
+    try {
+      const [s, c] = await Promise.all([agendaAPI.googleStatus(), agendaAPI.listConflicts()]);
+      setGoogleStatus(s.data);
+      setConflicts(c.data || []);
+    } catch { /* module off or offline — ignore */ }
+  };
+
+  // Load Google status for the button badge, and surface the OAuth redirect result.
+  useEffect(() => {
+    if (!hasModule('google_calendar')) return;
+    loadGoogle();
+    const params = new URLSearchParams(window.location.search);
+    const g = params.get('google');
+    if (g) {
+      if (g === 'connected') { toast.success('Compte Google connecté'); setShowGoogleSync(true); }
+      else toast.error('Connexion Google échouée');
+      params.delete('google');
+      const qs = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const openGoogleSync = async () => {
+    setShowGoogleSync(true);
+    setIcalBusy(true);
+    loadGoogle();
+    try {
+      const { data } = await agendaAPI.icalEnable();
+      setIcal(data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Erreur de synchronisation');
+    } finally {
+      setIcalBusy(false);
+    }
+  };
+
+  const connectGoogle = async () => {
+    try {
+      const { data } = await agendaAPI.googleConnect();
+      window.location.href = data.auth_url;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Connexion Google indisponible');
+    }
+  };
+  const syncGoogleNow = async () => {
+    setGoogleBusy(true);
+    try {
+      await agendaAPI.googleSync();
+      await loadGoogle();
+      queryClient.invalidateQueries({ queryKey: ['external-events'] });
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      toast.success('Synchronisation effectuée');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Échec de la synchronisation');
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+  const disconnectGoogle = async () => {
+    try {
+      await agendaAPI.googleDisconnect();
+      await loadGoogle();
+      toast.success('Compte Google déconnecté');
+    } catch {
+      toast.error('Erreur');
+    }
+  };
+  const resolveConflictAction = async (id, resolution) => {
+    try {
+      await agendaAPI.resolveConflict(id, resolution);
+      await loadGoogle();
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['external-events'] });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Erreur de résolution');
+    }
+  };
+  const rotateIcal = async () => {
+    setIcalBusy(true);
+    try {
+      const { data } = await agendaAPI.icalRotate();
+      setIcal(data);
+      toast.success('Nouveau lien généré — l\'ancien ne fonctionne plus');
+    } catch {
+      toast.error('Erreur');
+    } finally {
+      setIcalBusy(false);
+    }
+  };
+  const disableIcal = async () => {
+    try {
+      await agendaAPI.icalDisable();
+      setIcal(null);
+      setShowGoogleSync(false);
+      toast.success('Synchronisation désactivée');
+    } catch {
+      toast.error('Erreur');
+    }
+  };
+  const copyFeed = () => {
+    if (ical?.feed_url && navigator.clipboard) {
+      navigator.clipboard.writeText(ical.feed_url);
+      toast.success('Lien copié');
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -284,9 +420,117 @@ export default function AgendaPage() {
             <option value="">Tous les vétérinaires</option>
             {vets.map(v => <option key={v.id} value={v.id}>Dr. {v.last_name} {v.first_name}</option>)}
           </select>
+          {hasModule('google_calendar') && (
+            <button className="btn btn-secondary" onClick={openGoogleSync} title="Synchroniser avec Google Agenda" style={{ position: 'relative' }}>
+              📅 Google Agenda
+              {(googleStatus?.open_conflicts || conflicts.length) > 0 && (
+                <span style={{ position: 'absolute', top: '-6px', right: '-6px', minWidth: '18px', height: '18px', padding: '0 4px', borderRadius: '9px', background: 'var(--red, #ef4444)', color: 'white', fontSize: '0.65rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {googleStatus?.open_conflicts || conflicts.length}
+                </span>
+              )}
+            </button>
+          )}
           <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouveau RDV</button>
         </div>
       </div>
+
+      {showGoogleSync && (
+        <div onClick={() => setShowGoogleSync(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', overflowY: 'auto' }}>
+          <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: '560px', width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 className="card-title" style={{ marginBottom: '12px' }}>Synchronisation de l'agenda</h3>
+
+            {/* ── Google Agenda (two-way) ── */}
+            <div style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '14px', marginBottom: '14px' }}>
+              <div style={{ fontWeight: 600, marginBottom: '4px' }}>Google Agenda — synchronisation bidirectionnelle</div>
+              {!googleStatus?.connected ? (
+                <>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--gray-500)', marginBottom: '12px' }}>
+                    Connecte ton compte Google : tes RDV cliniques y sont publiés, et tes événements Google bloquent tes créneaux ici. Les divergences te sont signalées (rien n'est écrasé automatiquement).
+                  </p>
+                  <button className="btn btn-primary" onClick={connectGoogle} style={{ width: '100%' }}>
+                    Connecter mon compte Google
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--gray-500)', marginBottom: '10px' }}>
+                    Connecté{googleStatus.email ? ` (${googleStatus.email})` : ''}.
+                    {googleStatus.last_sync_at ? ` Dernière sync : ${new Date(googleStatus.last_sync_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.` : ''}
+                  </p>
+                  {googleStatus.last_error && (
+                    <p style={{ fontSize: '0.78rem', color: 'var(--red, #ef4444)', marginBottom: '10px' }}>⚠ {googleStatus.last_error}</p>
+                  )}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="btn btn-secondary" onClick={syncGoogleNow} disabled={googleBusy}>
+                      {googleBusy ? 'Sync…' : 'Synchroniser maintenant'}
+                    </button>
+                    <button className="btn btn-secondary" style={{ color: 'var(--red, #ef4444)' }} onClick={disconnectGoogle}>Déconnecter</button>
+                  </div>
+
+                  {conflicts.length > 0 && (
+                    <div style={{ marginTop: '14px' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '6px' }}>
+                        Conflits à vérifier ({conflicts.length})
+                      </div>
+                      {conflicts.map((c) => (
+                        <div key={c.id} style={{ background: 'var(--gray-50)', borderRadius: '6px', padding: '8px 10px', marginBottom: '6px' }}>
+                          <div style={{ fontSize: '0.8rem', marginBottom: '6px' }}>
+                            {c.type === 'modified_on_google' && '🕑 RDV déplacé dans Google'}
+                            {c.type === 'deleted_on_google' && '🗑 RDV supprimé dans Google'}
+                            {c.type === 'double_booking' && `⚠ Chevauchement${c.details?.external?.title ? ` avec « ${c.details.external.title} »` : ''}`}
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {c.type !== 'double_booking' && (
+                              <>
+                                <button className="btn btn-sm btn-secondary" onClick={() => resolveConflictAction(c.id, 'keep_app')}>Garder l'app</button>
+                                <button className="btn btn-sm btn-secondary" onClick={() => resolveConflictAction(c.id, 'keep_google')}>Garder Google</button>
+                              </>
+                            )}
+                            <button className="btn btn-sm btn-secondary" onClick={() => resolveConflictAction(c.id, 'dismiss')}>Ignorer</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* ── iCal subscription (read-only; iPhone / Outlook) ── */}
+            <div style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '14px' }}>
+              <div style={{ fontWeight: 600, marginBottom: '4px' }}>Abonnement iCal (lecture seule)</div>
+              <p style={{ fontSize: '0.82rem', color: 'var(--gray-500)', marginBottom: '12px' }}>
+                Idéal pour iPhone / Apple Calendar / Outlook : un lien d'abonnement qui se met à jour tout seul.
+              </p>
+              {icalBusy && !ical ? (
+                <p style={{ color: 'var(--gray-400)' }}>Chargement…</p>
+              ) : ical && (
+                <>
+                  <a className="btn btn-secondary" href={ical.google_url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', width: '100%', justifyContent: 'center', marginBottom: '12px' }}>
+                    Ajouter via lien iCal (Google/Apple)
+                  </a>
+                  <label className="form-label">Lien d'abonnement</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input className="form-input" readOnly value={ical.feed_url} onFocus={(e) => e.target.select()} />
+                    <button className="btn btn-secondary" onClick={copyFeed}>Copier</button>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                    <button className="btn btn-secondary" onClick={rotateIcal} disabled={icalBusy}>Régénérer le lien</button>
+                    <button className="btn btn-secondary" style={{ color: 'var(--red, #ef4444)' }} onClick={disableIcal}>Désactiver</button>
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--gray-400)', marginTop: '12px' }}>
+                    ⚠ Lien personnel et secret — ne le partage pas. « Régénérer » invalide l'ancien.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div style={{ textAlign: 'right', marginTop: '14px' }}>
+              <button className="btn btn-secondary" onClick={() => setShowGoogleSync(false)}>Fermer</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="card">
@@ -531,10 +775,31 @@ export default function AgendaPage() {
         <h3 className="card-title" style={{ marginBottom: '16px' }}>
           {new Date(selectedDate + 'T00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </h3>
-        {appointments.length === 0 ? (
+        {scheduleItems.length === 0 ? (
           <p style={{ color: 'var(--gray-400)', textAlign: 'center' }}>Aucun RDV pour cette date</p>
         ) : (
-          appointments.map((appt) => (
+          scheduleItems.map((item) => {
+            if (item.kind === 'block') {
+              const b = item.data;
+              return (
+                <div key={`gblock-${b.id}`} className="agenda-slot" title="Créneau occupé importé de Google Agenda"
+                  style={{ borderLeft: '4px solid var(--gray-400)', background: 'repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(99,102,241,0.06) 8px, rgba(99,102,241,0.06) 16px)' }}>
+                  <div className="agenda-slot-time">
+                    {b.all_day
+                      ? 'Journée'
+                      : `${new Date(b.start_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} - ${new Date(b.end_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`}
+                  </div>
+                  <span className="badge badge-gray">Occupé</span>
+                  <div style={{ flex: 1, color: 'var(--gray-500)' }}>
+                    <span style={{ marginRight: '6px' }}>📅</span>
+                    <strong>{b.title || 'Occupé'}</strong>
+                    <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: 'var(--gray-400)' }}>Google Agenda</span>
+                  </div>
+                </div>
+              );
+            }
+            const appt = item.data;
+            return (
             <div key={appt.id} className="agenda-slot" style={{ borderLeft: `4px solid ${typeColors[appt.appointment_type] || typeColors.other}` }}>
               <div className="agenda-slot-time">
                 {new Date(appt.start_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -593,7 +858,8 @@ export default function AgendaPage() {
                 </div>
               )}
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
