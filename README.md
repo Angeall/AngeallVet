@@ -15,6 +15,10 @@ Application métier complète pour cliniques vétérinaires. Gestion des patient
 | **Hospitalisation** | Feuille de soins numérique, tâches planifiées, suivi en temps réel |
 | **RBAC** | Admin, Vétérinaire, ASV, Comptable avec droits différenciés |
 
+## Modules payants & licences
+
+Certains modules (SMS, Invoice Ninja / Peppol, Google Agenda) sont **optionnels** et débloqués par clinique via une **licence signée** déposée dans le `.env` (le nombre maximal d'utilisateurs s'y règle aussi). Guide déployeur pas-à-pas : **[docs/licensing.md](docs/licensing.md)**.
+
 ## Stack Technique
 
 - **Backend**: Python 3.12, FastAPI, SQLAlchemy 2, PostgreSQL
