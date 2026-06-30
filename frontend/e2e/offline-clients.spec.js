@@ -25,6 +25,10 @@ test('creates a client offline: optimistic row, badge, then syncs on reconnect',
   await login(page);
   await page.getByRole('link', { name: 'Clients', exact: true }).click();
   await expect(page).toHaveURL(/\/clients$/);
+  // Wait for the lazy-loaded ClientsPage chunk to fetch + render while online,
+  // before simulating offline (a not-yet-loaded route chunk can't be fetched
+  // once offline — that needs the service worker precache, see offline roadmap).
+  await expect(page.getByRole('button', { name: /Nouveau client/ })).toBeVisible();
 
   await page.context().setOffline(true);
 
