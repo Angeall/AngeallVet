@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { billingAPI, authAPI } from '../services/api';
+import { billingAPI, authAPI, commissionsAPI } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
@@ -25,6 +26,10 @@ export default function StatsPage() {
   const [vetDateTo, setVetDateTo] = useState(new Date().toISOString().slice(0, 10));
   const [vetInvoices, setVetInvoices] = useState([]);
   const [vetLoading, setVetLoading] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [commissions, setCommissions] = useState(null);
+  const [rules, setRules] = useState([]);
 
   useEffect(() => {
     authAPI.listStaff().then(res => {
@@ -59,8 +64,26 @@ export default function StatsPage() {
     }
   };
 
+  const loadCommissions = async () => {
+    if (!isAdmin) return;
+    try {
+      const params = { date_from: vetDateFrom, date_to: vetDateTo };
+      if (selectedVetId) params.veterinarian_id = parseInt(selectedVetId);
+      const [c, r] = await Promise.all([commissionsAPI.report(params), commissionsAPI.listRules()]);
+      setCommissions(c.data);
+      setRules((r.data || []).filter((x) => x.is_active));
+    } catch { /* admin uniquement ; ignoré pour les autres rôles */ }
+  };
+
+  const changeDayRule = async (userId, dateStr, ruleId) => {
+    try {
+      await commissionsAPI.setDayRule({ user_id: userId, date: dateStr, rule_id: ruleId ? parseInt(ruleId) : null });
+      loadCommissions();
+    } catch { toast.error('Erreur'); }
+  };
+
   useEffect(() => {
-    if (tab === 'vet') loadVetInvoices();
+    if (tab === 'vet') { loadVetInvoices(); loadCommissions(); }
   }, [tab, selectedVetId, vetDateFrom, vetDateTo]);
 
   // Vet summary
@@ -141,6 +164,45 @@ export default function StatsPage() {
               <div><div className="stat-value">{vetInvoices.length} ({vetPaidCount} payees)</div><div className="stat-label">Factures</div></div>
             </div>
           </div>
+
+          {isAdmin && commissions && (
+            <div className="card">
+              <h3 className="card-title" style={{ marginBottom: '16px' }}>Commissions a payer <span style={{ fontWeight: 400, fontSize: '0.85rem', color: 'var(--gray-400)' }}>(sur l'encaisse)</span></h3>
+              {commissions.veterinarians.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'var(--gray-400)' }}>Aucun encaissement sur la periode</p>
+              ) : (
+                commissions.veterinarians.map((v) => (
+                  <div key={v.user_id} style={{ marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
+                      <strong>{v.name}</strong>
+                      <span>
+                        <span style={{ color: 'var(--gray-400)', marginRight: '10px', fontSize: '0.85rem' }}>encaisse {v.paid.toFixed(2)} EUR</span>
+                        <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{v.commission.toFixed(2)} EUR</span>
+                      </span>
+                    </div>
+                    <table>
+                      <thead><tr><th>Jour</th><th>Encaisse</th><th>Regle appliquee ce jour</th><th style={{ textAlign: 'right' }}>Commission</th></tr></thead>
+                      <tbody>
+                        {v.by_day.map((d) => (
+                          <tr key={d.date}>
+                            <td>{d.date}</td>
+                            <td>{d.paid.toFixed(2)} EUR</td>
+                            <td>
+                              <select className="form-select" style={{ maxWidth: '220px' }} value={d.rule_id || ''} onChange={(e) => changeDayRule(v.user_id, d.date, e.target.value)}>
+                                <option value="">Par defaut (programme)</option>
+                                {rules.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                              </select>
+                            </td>
+                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{d.commission.toFixed(2)} EUR</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
 
           {/* Invoice list */}
           <div className="card">

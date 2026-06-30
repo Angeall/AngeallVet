@@ -26,6 +26,7 @@ import StatsPage from './pages/StatsPage';
 import DebtsPage from './pages/DebtsPage';
 import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
+import BillingRulesPage from './pages/BillingRulesPage';
 import ControlledSubstancesPage from './pages/ControlledSubstancesPage';
 import AssociationsPage from './pages/AssociationsPage';
 
@@ -71,6 +72,7 @@ function App() {
                   <Route path="/controlled-substances" element={<ControlledSubstancesPage />} />
                   <Route path="/associations" element={<AssociationsPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/billing-rules" element={<BillingRulesPage />} />
                 </Routes>
               </Layout>
             </PrivateRoute>

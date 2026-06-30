@@ -229,4 +229,20 @@ export const controlledSubstancesAPI = {
   exportRegister: (params) => api.get('/controlled-substances/register/export', { params, responseType: 'blob' }),
 };
 
+// Veterinarian commission rules (admin)
+export const commissionsAPI = {
+  listRules: () => api.get('/billing/rules'),
+  createRule: (data) => api.post('/billing/rules', data),
+  updateRule: (id, data) => api.put(`/billing/rules/${id}`, data),
+  deleteRule: (id) => api.delete(`/billing/rules/${id}`),
+  listPrograms: () => api.get('/billing/programs'),
+  createProgram: (data) => api.post('/billing/programs', data),
+  updateProgram: (id, data) => api.put(`/billing/programs/${id}`, data),
+  deleteProgram: (id) => api.delete(`/billing/programs/${id}`),
+  listVets: () => api.get('/billing/veterinarians'),
+  assignProgram: (userId, programId) => api.put(`/billing/veterinarians/${userId}/program`, { program_id: programId }),
+  report: (params) => api.get('/billing/commissions', { params }),
+  setDayRule: (data) => api.put('/billing/commissions/day-rule', data),
+};
+
 export default api;

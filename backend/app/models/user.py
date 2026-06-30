@@ -86,6 +86,8 @@ class User(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     google_calendar_token = Column(String(500))
     sidenav_color = Column(String(7))  # hex color e.g. "#1e3a5f"
+    # Default weekly commission program for this vet (see billing_rules models).
+    billing_program_id = Column(Integer, ForeignKey("billing_programs.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

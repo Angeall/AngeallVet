@@ -26,6 +26,7 @@ const navItems = [
   { path: '/communications', label: 'Communications', icon: 'mail', perm: 'communications' },
   { section: 'Administration' },
   { path: '/users', label: 'Utilisateurs', icon: 'team', perm: 'users' },
+  { path: '/billing-rules', label: 'Regles de facturation', icon: 'receipt', perm: 'users' },
   { path: '/settings', label: 'Parametres', icon: 'gear', perm: 'users' },
 ];
 

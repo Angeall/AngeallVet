@@ -12,7 +12,7 @@ from app.core.database import Base, _default_engine as engine, _default_session_
 from app.api.endpoints import (
     auth, clients, animals, appointments,
     medical, inventory, billing, communication, hospitalization,
-    controlled_substances, associations,
+    controlled_substances, associations, billing_rules,
 )
 from app.api.endpoints import settings as settings_endpoints
 
@@ -84,6 +84,7 @@ app.include_router(appointments.router, prefix=API_PREFIX)
 app.include_router(medical.router, prefix=API_PREFIX)
 app.include_router(inventory.router, prefix=API_PREFIX)
 app.include_router(billing.router, prefix=API_PREFIX)
+app.include_router(billing_rules.router, prefix=API_PREFIX)
 app.include_router(communication.router, prefix=API_PREFIX)
 app.include_router(hospitalization.router, prefix=API_PREFIX)
 app.include_router(settings_endpoints.router, prefix=API_PREFIX)
@@ -124,6 +125,7 @@ def _ensure_schema(db_engine):
         ("controlled_substance_entries", "dosage", "ALTER TABLE controlled_substance_entries ADD COLUMN dosage VARCHAR(200)"),
         ("controlled_substance_entries", "total_delivered", "ALTER TABLE controlled_substance_entries ADD COLUMN total_delivered NUMERIC(10,2)"),
         ("users", "sidenav_color", "ALTER TABLE users ADD COLUMN sidenav_color VARCHAR(7)"),
+        ("users", "billing_program_id", "ALTER TABLE users ADD COLUMN billing_program_id INTEGER"),
         ("invoices", "medical_record_id", "ALTER TABLE invoices ADD COLUMN medical_record_id INTEGER REFERENCES medical_records(id)"),
         ("invoice_lines", "lot_number", "ALTER TABLE invoice_lines ADD COLUMN lot_number VARCHAR(100)"),
         ("medical_record_products", "lot_number", "ALTER TABLE medical_record_products ADD COLUMN lot_number VARCHAR(100)"),

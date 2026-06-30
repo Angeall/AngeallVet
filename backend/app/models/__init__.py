@@ -18,6 +18,10 @@ from app.models.settings import ClinicSettings, VatRate
 from app.models.controlled_substance import ControlledSubstanceEntry
 from app.models.association import Association
 from app.models.idempotency import IdempotencyKey
+from app.models.billing_rules import (
+    BillingRule, BillingRuleComponent, BillingProgram, BillingProgramDay,
+    BillingDayOverride,
+)
 
 __all__ = [
     "Tenant", "User", "Client", "Animal", "AnimalAlert", "WeightRecord",
@@ -32,4 +36,6 @@ __all__ = [
     "ControlledSubstanceEntry",
     "Association",
     "IdempotencyKey",
+    "BillingRule", "BillingRuleComponent", "BillingProgram",
+    "BillingProgramDay", "BillingDayOverride",
 ]
