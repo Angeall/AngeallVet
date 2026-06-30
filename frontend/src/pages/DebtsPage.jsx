@@ -81,7 +81,7 @@ export default function DebtsPage() {
       </div>
 
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
           <h3 className="card-title" style={{ margin: 0 }}>Clients par montant impaye decroissant</h3>
           <input
             type="text"
@@ -89,10 +89,11 @@ export default function DebtsPage() {
             placeholder="Rechercher un client..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ width: '250px' }}
+            style={{ width: '250px', maxWidth: '100%', flex: '1 1 200px' }}
           />
         </div>
 
+        <div className="table-container">
         <table>
           <thead>
             <tr>
@@ -156,6 +157,7 @@ export default function DebtsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

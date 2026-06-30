@@ -150,8 +150,8 @@ export default function StatsPage() {
       {/* ==================== GLOBAL TAB ==================== */}
       {tab === 'global' && (
         <div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px' }}>
-            <input type="date" className="form-input" value={dateRef} onChange={(e) => setDateRef(e.target.value)} style={{ width: '160px' }} />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <input type="date" className="form-input" value={dateRef} onChange={(e) => setDateRef(e.target.value)} style={{ width: '160px', maxWidth: '100%' }} />
             {['day', 'week', 'month'].map(p => (
               <button key={p} className={`btn ${period === p ? 'btn-primary' : 'btn-secondary'} btn-sm`} onClick={() => setPeriod(p)}>
                 {periodLabels[p]}
@@ -406,7 +406,7 @@ function GlobalStatsView({ stats }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
         <div className="card">
           <h3 className="card-title" style={{ marginBottom: '16px' }}>Evolution du CA</h3>
           {dailyData.length > 0 ? (
