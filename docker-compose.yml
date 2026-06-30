@@ -69,6 +69,7 @@ services:
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html
       - ./frontend/vite.config.js:/app/vite.config.js
+      - ./frontend/public:/app/public
     environment:
       # Behind Caddy everything is same-origin: API at /api/v1, PocketBase at /pb.
       - VITE_API_URL=/api/v1
