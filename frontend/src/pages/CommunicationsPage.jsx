@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { communicationsAPI } from '../services/api';
+import { useModules } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export default function CommunicationsPage() {
+  const { hasModule } = useModules();
+  const smsEnabled = hasModule('sms');
   const [comms, setComms] = useState([]);
   const [rules, setRules] = useState([]);
   const [tab, setTab] = useState('history');
@@ -106,7 +109,7 @@ export default function CommunicationsPage() {
                 <label className="form-label">Canal</label>
                 <select className="form-select" value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value })}>
                   <option value="email">Email</option>
-                  <option value="sms">SMS</option>
+                  <option value="sms" disabled={!smsEnabled}>{smsEnabled ? 'SMS' : 'SMS — module non activé'}</option>
                   <option value="postal">Courrier postal</option>
                 </select>
               </div>
@@ -173,8 +176,8 @@ export default function CommunicationsPage() {
                     <label className="form-label">Canal</label>
                     <select className="form-select" value={ruleForm.channel} onChange={(e) => setRuleForm({ ...ruleForm, channel: e.target.value })}>
                       <option value="email">Email</option>
-                      <option value="sms">SMS</option>
-                      <option value="both">Email + SMS</option>
+                      <option value="sms" disabled={!smsEnabled}>{smsEnabled ? 'SMS' : 'SMS — module non activé'}</option>
+                      <option value="both" disabled={!smsEnabled}>{smsEnabled ? 'Email + SMS' : 'Email + SMS — module non activé'}</option>
                       <option value="postal">Courrier postal</option>
                     </select>
                   </div>

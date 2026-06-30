@@ -35,6 +35,9 @@ class TenantContext:
     pb_admin_password: str
     jwt_secret: str
     is_default: bool = False
+    # Paid modules unlocked for this tenant (from its signed license). Read by
+    # the ``require_module`` dependency to gate paid endpoints server-side.
+    modules: frozenset = frozenset()
 
 
 def derive_tenant_secret(slug: str) -> str:
@@ -51,7 +54,13 @@ def derive_tenant_secret(slug: str) -> str:
 
 
 def default_tenant_context() -> TenantContext:
-    """Context for the default tenant (no sub-domain matched)."""
+    """Context for the default tenant (no sub-domain matched).
+
+    This is the path used by the common "one Docker stack per clinic" model:
+    the clinic's modules come from the signed ``LICENSE`` in its own ``.env``.
+    """
+    from app.core.licensing import resolve_modules
+
     slug = settings.DEFAULT_TENANT_SLUG
     return TenantContext(
         slug=slug,
@@ -61,6 +70,7 @@ def default_tenant_context() -> TenantContext:
         pb_admin_password=settings.POCKETBASE_ADMIN_PASSWORD,
         jwt_secret=derive_tenant_secret(slug),
         is_default=True,
+        modules=resolve_modules(slug, settings.LICENSE),
     )
 
 
@@ -91,6 +101,11 @@ def extract_subdomain(host: str) -> Optional[str]:
 
 
 def _context_from_tenant(t) -> TenantContext:
+    from app.core.licensing import resolve_modules
+
+    # A central stack serving several tenants stores each tenant's signed license
+    # on its registry row (``tenants.license``); a per-clinic stack uses the
+    # default-tenant path above instead.
     return TenantContext(
         slug=t.slug,
         db_url=t.database_url,
@@ -99,6 +114,7 @@ def _context_from_tenant(t) -> TenantContext:
         pb_admin_password=t.pb_admin_password or settings.POCKETBASE_ADMIN_PASSWORD,
         jwt_secret=derive_tenant_secret(t.slug),
         is_default=False,
+        modules=resolve_modules(t.slug, getattr(t, "license", "") or ""),
     )
 
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -31,6 +31,12 @@ class Tenant(Base):
     pb_admin_password = Column(EncryptedSecret, nullable=True)
     # NB: the per-tenant application-JWT secret is always DERIVED from
     # APP_SECRET_KEY + slug (see core.tenancy), never stored.
+
+    # Signed paid-module license for this tenant (Ed25519 JWT). Not secret: it is
+    # public-verifiable and grants nothing without the deployer's private key.
+    # Used only by the central multi-tenant stack; a per-clinic stack reads its
+    # license from the LICENSE env var instead. See app/core/licensing.
+    license = Column(Text, nullable=True)
 
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

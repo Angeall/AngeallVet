@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { billingAPI, clientsAPI, animalsAPI } from '../services/api';
+import { downloadBlob } from '../services/download';
 import toast from 'react-hot-toast';
 
 export default function EstimateDetailPage() {
@@ -46,6 +47,14 @@ export default function EstimateDetailPage() {
     }
   };
 
+  const handleDownloadPdf = async () => {
+    try {
+      downloadBlob(await billingAPI.estimatePdf(id), `${estimate.estimate_number}.pdf`);
+    } catch {
+      toast.error('PDF indisponible');
+    }
+  };
+
   if (!estimate) return <div className="page-content">Chargement...</div>;
 
   return (
@@ -63,6 +72,9 @@ export default function EstimateDetailPage() {
           <span className={`badge badge-${estimate.status === 'accepted' ? 'green' : estimate.status === 'invoiced' ? 'purple' : 'blue'}`}>
             {estimate.status}
           </span>
+          <button className="btn btn-secondary" onClick={handleDownloadPdf} style={{ marginLeft: '8px' }}>
+            Telecharger le PDF
+          </button>
           {estimate.status !== 'invoiced' && estimate.status !== 'rejected' && (
             <button className="btn btn-primary" onClick={convertToInvoice} style={{ marginLeft: '8px' }}>
               Convertir en facture

@@ -23,6 +23,7 @@ email-validator==2.3.0
 python-magic==0.4.27
 Pillow==12.2.0
 openpyxl==3.1.5
+fpdf2==2.8.5          # simple invoice/quote PDF (free tier; no system deps)
 
 # Communication
 httpx==0.28.1

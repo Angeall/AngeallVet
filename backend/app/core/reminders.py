@@ -35,8 +35,19 @@ def _ensure_token(db, client):
     return client.unsubscribe_token
 
 
-def send_due_reminders(db: Session, base_url: str = ""):
-    """Send all due vaccination reminders for this tenant DB. Returns counts."""
+def send_due_reminders(db: Session, base_url: str = "", modules=None):
+    """Send all due vaccination reminders for this tenant DB. Returns counts.
+
+    ``modules`` is the tenant's unlocked module set; when it doesn't include
+    ``sms`` the SMS channel is skipped (e-mail still goes out). Defaults to all
+    modules so direct callers / tests keep the previous behaviour.
+    """
+    from app.core.licensing import ALL_MODULES, MODULE_SMS
+
+    if modules is None:
+        modules = ALL_MODULES
+    sms_enabled = MODULE_SMS in modules
+
     rules = db.query(ReminderRule).filter(
         ReminderRule.is_active == True,
         ReminderRule.channel.in_(["email", "sms", "both"]),
@@ -53,6 +64,9 @@ def send_due_reminders(db: Session, base_url: str = ""):
 
     for rule in rules:
         channels = ["email", "sms"] if rule.channel == "both" else [rule.channel]
+        # Drop SMS when the paid module isn't active for this tenant.
+        if not sms_enabled:
+            channels = [c for c in channels if c != "sms"]
         rows = (
             db.query(Animal, Client, MedicalRecord)
             .join(Client, Animal.client_id == Client.id)

@@ -6,7 +6,9 @@ from datetime import datetime
 
 from app.api.deps import get_tenant_db
 from app.core.database import get_request_db
-from app.core.security import get_current_user, require_roles
+from app.core.security import get_current_user, require_roles, tenant_has_module
+from app.core.licensing import MODULE_SMS, MODULE_LABELS
+from app.core.tenancy import tenant_from_request
 from app.core.mailer import send_email, MailerError
 from app.core.sms import send_sms, SmsError
 from app.core.reminders import send_due_reminders
@@ -44,9 +46,17 @@ def list_communications(
 @router.post("", response_model=CommunicationResponse, status_code=201)
 def send_communication(
     data: CommunicationCreate,
+    request: Request,
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
+    # SMS is a paid module: gate it server-side (the real lock). E-mail is free.
+    if data.channel == "sms" and not tenant_has_module(request, MODULE_SMS):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Module « {MODULE_LABELS[MODULE_SMS]} » non activé pour votre clinique.",
+        )
+
     client = db.query(Client).filter(Client.id == data.client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client non trouve")
@@ -225,7 +235,7 @@ def run_reminders(
 ):
     """Manually trigger the due-reminder send for this tenant (also runs daily)."""
     base = str(request.base_url).rstrip("/")
-    return send_due_reminders(db, base)
+    return send_due_reminders(db, base, modules=tenant_from_request(request).modules)
 
 
 @router.get("/unsubscribe/{token}")

@@ -95,6 +95,33 @@ def require_roles(*roles):
     return role_checker
 
 
+def tenant_has_module(request: Request, module_key: str) -> bool:
+    """True if the current request's tenant has the given paid module unlocked."""
+    return module_key in tenant_from_request(request).modules
+
+
+def require_module(module_key: str):
+    """Dependency that gates an endpoint behind a paid module.
+
+    This is the REAL lock: the entitlement comes from the tenant's signed license
+    (resolved into ``TenantContext.modules``), never from anything the client can
+    edit. Tampering with the frontend or calling the API directly changes
+    nothing — without the module the request is refused with 403.
+    """
+    def checker(request: Request):
+        from app.core.licensing import MODULE_LABELS
+
+        if module_key not in tenant_from_request(request).modules:
+            label = MODULE_LABELS.get(module_key, module_key)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Module « {label} » non activé pour votre clinique.",
+            )
+        return True
+
+    return checker
+
+
 def require_platform_admin(x_platform_admin_token: str = Header(default="")):
     """Guard for cross-tenant registry endpoints.
 

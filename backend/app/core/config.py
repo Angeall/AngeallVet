@@ -50,6 +50,18 @@ class Settings(BaseSettings):
     # read or manage other tenants.
     PLATFORM_ADMIN_TOKEN: str = ""
 
+    # --- Paid modules (per-tenant entitlements) ------------------------
+    # Modules (SMS, Invoice Ninja, Google Calendar…) are unlocked by a
+    # cryptographically signed license (Ed25519). The app holds ONLY the public
+    # key, so it can verify but never forge a license — editing this .env cannot
+    # grant a module without the deployer's private key. See app/core/licensing.
+    LICENSE_PUBLIC_KEY: str = ""   # PEM (escaped \n accepted). Safe to ship.
+    LICENSE: str = ""              # the signed license token for THIS tenant.
+    # Dev/test convenience: when NO public key is set in a dev environment, all
+    # modules are enabled. Optionally restrict here (comma list). Ignored as soon
+    # as a public key is configured, and always ignored in production.
+    DEV_MODULES: str = ""
+
     # Email
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587

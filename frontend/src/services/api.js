@@ -69,6 +69,7 @@ const idem = (key) => (key ? { headers: { 'Idempotency-Key': key } } : undefined
 export const authAPI = {
   session: (pbToken) => api.post('/auth/session', { pb_token: pbToken }),
   me: () => api.get('/auth/me'),
+  modules: () => api.get('/auth/modules'),
   updateMe: (data) => api.put('/auth/me', data),
   listUsers: () => api.get('/auth/users'),
   listStaff: () => api.get('/auth/staff'),
@@ -173,6 +174,7 @@ export const billingAPI = {
   recordPayment: (data) => api.post('/billing/payments', data),
   sendInvoice: (id) => api.post(`/billing/invoices/${id}/send`),
   invoicePdf: (id) => api.get(`/billing/invoices/${id}/pdf`, { responseType: 'blob' }),
+  estimatePdf: (id) => api.get(`/billing/estimates/${id}/pdf`, { responseType: 'blob' }),
   listEstimates: (params) => api.get('/billing/estimates', { params }),
   getEstimate: (id) => api.get(`/billing/estimates/${id}`),
   createEstimate: (data) => api.post('/billing/estimates', data),

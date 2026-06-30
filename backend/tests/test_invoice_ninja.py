@@ -80,10 +80,15 @@ def test_pdf_proxy(client, db, auth_headers, monkeypatch):
     _configure(db)
     monkeypatch.setattr(inj_mod.httpx, "request", _fake_request)
     _, invoice_id = _make_invoice(client, auth_headers)
-    # Not pushed yet -> 400.
-    assert client.get(f"/api/v1/billing/invoices/{invoice_id}/pdf", headers=auth_headers).status_code == 400
+    # Before any Invoice Ninja push, the free local PDF is served (not a 400).
+    r0 = client.get(f"/api/v1/billing/invoices/{invoice_id}/pdf", headers=auth_headers)
+    assert r0.status_code == 200
+    assert r0.content.startswith(b"%PDF")
+    assert b"fake" not in r0.content  # locally rendered, not the IN proxy
+    # After pushing, the compliant Invoice Ninja PDF is proxied instead.
     client.post(f"/api/v1/billing/invoices/{invoice_id}/send", headers=auth_headers)
     r = client.get(f"/api/v1/billing/invoices/{invoice_id}/pdf", headers=auth_headers)
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/pdf"
     assert r.content.startswith(b"%PDF")
+    assert b"fake" in r.content  # the Invoice Ninja-proxied PDF

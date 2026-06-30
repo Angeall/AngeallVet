@@ -53,6 +53,19 @@ For local dev without the proxy, create `frontend/.env.local` with `VITE_API_URL
 
 **Schema management.** `_ensure_schema()` in `app/main.py` runs at startup on the central DB and every active tenant DB: `create_all` + a `_pending_columns` list of `ALTER TABLE ADD COLUMN` + a `_pending_renames` list. Alembic also runs (non-blocking). **When you add a column to a model, also add it to `_pending_columns`** so pre-existing databases get it. Performance indexes (pg_trgm search + composites) live in `app/core/db_indexes.py` and are applied the same way (Postgres-only, AUTOCOMMIT) plus migration 009 — single source of truth, so add new index DDL there.
 
+## Paid modules (licensing)
+
+Optional features are sold as **modules** unlocked per tenant by a **cryptographically signed license** (Ed25519), never a plain env flag. Single source of truth: `app/core/licensing.py` (`ALL_MODULES`, `MODULE_LABELS`). Current keys: `invoice_ninja`, `sms`, `google_calendar`.
+
+- **The lock is server-side.** Gate endpoints with `Depends(require_module("sms"))` or branch on `tenant_has_module(request, key)` (`app/core/security.py`). The frontend (`useModules()` in `contexts/AuthContext`) only hides UI — it grants nothing.
+- **Where entitlements come from.** `TenantContext.modules` is resolved at request time: the per-clinic stack reads the signed `LICENSE` from its own `.env`; a central multi-tenant stack reads each tenant's `tenants.license` column (set via `PUT /auth/tenants/{id}/license`, platform-admin only). The app holds only `LICENSE_PUBLIC_KEY`, so it verifies but cannot forge — editing the `.env` can't grant a module.
+- **Dev/test:** with no `LICENSE_PUBLIC_KEY` set in a dev env, all modules are on (so tests see the full app). Set a public key to drive modules strictly from a license, even in dev.
+- **Issuing licenses** (deployer only, private key off the servers): `python -m app.licensing keygen`, then `python -m app.licensing sign --key private.pem --tenant <slug> --modules sms,invoice_ninja --days 365`.
+- **Free tier:** invoices/quotes fall back to a simple local PDF (`app/core/invoice_pdf.py`, fpdf2); `invoice_ninja` swaps in Invoice Ninja PDF + Peppol. Reminder e-mail is free; SMS needs the `sms` module. The in-app calendar is free. When adding a gated endpoint, prefer failing the gate before any side effect.
+- **`google_calendar` module — two ways to sync, both per-vet** (`app/api/endpoints/agenda.py`):
+  - *iCal feed* (read-only, iPhone/Apple/Outlook): public `GET /agenda/ical/{token}.ics` (no JWT; keyed by `User.ical_token`, still module-gated), generator in `app/core/ical.py`.
+  - *Google OAuth two-way sync*: encrypted per-vet tokens (`GoogleCalendarAccount`), client in `app/core/google_calendar.py`, engine in `app/core/google_sync.py`, polled every 15 min by the scheduler. Pulls the vet's Google events as busy blocks (`ExternalCalendarEvent`) and pushes clinic appointments out; divergences are **signalled, never overwritten** → `CalendarSyncConflict` + a notification, resolved manually (`/agenda/conflicts`). Conflicted appointments are skipped on push.
+
 ## Gotchas
 
 - **Vite + PocketBase:** the PB SDK has a method named `import`, which Vite's dev import-analysis mistakes for a dynamic `import()` and corrupts → dev server crashes with a blank page. The `pocketbaseImportMethodFix` plugin + `optimizeDeps.exclude: ['pocketbase']` in `frontend/vite.config.js` fix it. **Do not remove them.** (Production rollup build is unaffected.)

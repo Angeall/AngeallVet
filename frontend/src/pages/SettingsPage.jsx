@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { settingsAPI, animalsAPI, medicalAPI, inventoryAPI, authAPI, exportsAPI } from '../services/api';
 import { downloadBlob } from '../services/download';
+import { useModules } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export default function SettingsPage() {
+  const { hasModule } = useModules();
   const [tab, setTab] = useState('clinic');
   const [clinic, setClinic] = useState({
     clinic_name: '', address: '', city: '', postal_code: '', country: 'France',
@@ -533,16 +535,24 @@ export default function SettingsPage() {
               <p style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: '12px' }}>
                 Delegue le PDF et l'e-invoicing Peppol (B2B) a ton instance Invoice Ninja.
               </p>
-              <div className="form-row">
-                <div className="form-group" style={{ flex: 2 }}>
-                  <label className="form-label">URL de l'instance</label>
-                  <input className="form-input" value={clinic.invoice_ninja_url} onChange={(e) => setClinic({ ...clinic, invoice_ninja_url: e.target.value })} placeholder="https://facturation.ma-clinique.be" />
+              {hasModule('invoice_ninja') ? (
+                <div className="form-row">
+                  <div className="form-group" style={{ flex: 2 }}>
+                    <label className="form-label">URL de l'instance</label>
+                    <input className="form-input" value={clinic.invoice_ninja_url} onChange={(e) => setClinic({ ...clinic, invoice_ninja_url: e.target.value })} placeholder="https://facturation.ma-clinique.be" />
+                  </div>
+                  <div className="form-group" style={{ flex: 2 }}>
+                    <label className="form-label">Token API {injTokenSet && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}>(configure)</span>}</label>
+                    <input type="password" autoComplete="new-password" className="form-input" value={injToken} onChange={(e) => setInjToken(e.target.value)} placeholder={injTokenSet ? 'Laisser vide pour conserver' : 'Token X-Api-Token'} />
+                  </div>
                 </div>
-                <div className="form-group" style={{ flex: 2 }}>
-                  <label className="form-label">Token API {injTokenSet && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}>(configure)</span>}</label>
-                  <input type="password" autoComplete="new-password" className="form-input" value={injToken} onChange={(e) => setInjToken(e.target.value)} placeholder={injTokenSet ? 'Laisser vide pour conserver' : 'Token X-Api-Token'} />
+              ) : (
+                <div style={{ background: 'var(--gray-50)', border: '1px dashed var(--gray-300)', borderRadius: '8px', padding: '12px 14px', fontSize: '0.82rem', color: 'var(--gray-600)' }}>
+                  🔒 Module optionnel non activé. Vos factures sont éditées en <strong>PDF simple</strong> par défaut.
+                  L'e-invoicing Peppol et la délégation à Invoice Ninja sont disponibles via le module
+                  « Facturation avancée » — contactez votre prestataire pour l'activer.
                 </div>
-              </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>

@@ -53,6 +53,10 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
+    # Paid modules unlocked for this tenant. Read-only, derived from the signed
+    # license server-side — the frontend uses it for UX only (the backend is the
+    # real gate), so editing it client-side unlocks nothing.
+    modules: list[str] = []
 
 
 # Role permissions
@@ -78,6 +82,8 @@ class TenantResponse(BaseModel):
     pocketbase_url: Optional[str] = None
     is_active: bool
     created_at: datetime
+    # Modules currently unlocked by this tenant's signed license (decoded).
+    modules: list[str] = []
 
     class Config:
         from_attributes = True

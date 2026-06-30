@@ -5,6 +5,7 @@ from typing import Optional
 from app.core.database import get_central_db, get_request_db, init_tenant_database
 from app.core.security import get_current_user, require_roles, require_platform_admin, create_app_token
 from app.core.tenancy import tenant_from_request
+from app.core.licensing import resolve_modules, verify_license, ALL_MODULES
 from app.core.pocketbase import (
     pb_auth_with_password,
     pb_verify_token,
@@ -66,6 +67,7 @@ def _issue_session(db: Session, request: Request, record: dict, pb_token: str) -
         access_token=app_token,
         refresh_token=pb_token,
         user=UserResponse.model_validate(user),
+        modules=sorted(tenant.modules),
     )
 
 
@@ -137,6 +139,19 @@ def create_session(
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.get("/modules")
+def get_modules(request: Request, current_user: User = Depends(get_current_user)):
+    """Paid modules unlocked for the current tenant (UX hint; backend is the gate).
+
+    Derived from the tenant's signed license — read-only and untrusted on the
+    client side. ``available`` lists every module the product offers.
+    """
+    return {
+        "modules": sorted(tenant_from_request(request).modules),
+        "available": sorted(ALL_MODULES),
+    }
 
 
 @router.put("/me", response_model=UserResponse)
@@ -338,13 +353,19 @@ def mark_all_read(
 # Tenants live in the CENTRAL registry database (not tenant DBs).
 # We use get_central_db here explicitly.
 
+def _with_modules(t: Tenant) -> Tenant:
+    """Attach the decoded module list so TenantResponse can expose it."""
+    t.modules = sorted(resolve_modules(t.slug, getattr(t, "license", "") or ""))
+    return t
+
+
 @router.get("/tenants", response_model=list[TenantResponse])
 def list_tenants(
     db: Session = Depends(get_central_db),
     _: bool = Depends(require_platform_admin),
 ):
     """List all tenants (platform super-admin only)."""
-    return db.query(Tenant).order_by(Tenant.name).all()
+    return [_with_modules(t) for t in db.query(Tenant).order_by(Tenant.name).all()]
 
 
 @router.post("/tenants", status_code=201, response_model=TenantResponse)
@@ -392,7 +413,7 @@ def create_tenant(
             detail=f"Tenant cree mais erreur de provisioning de la base: {e}",
         )
 
-    return tenant
+    return _with_modules(tenant)
 
 
 @router.put("/tenants/{tenant_id}", response_model=TenantResponse)
@@ -419,7 +440,36 @@ def update_tenant(
         tenant.pocketbase_url = pocketbase_url
     db.commit()
     db.refresh(tenant)
-    return tenant
+    return _with_modules(tenant)
+
+
+@router.put("/tenants/{tenant_id}/license", response_model=TenantResponse)
+def set_tenant_license(
+    tenant_id: int,
+    license: str = "",
+    db: Session = Depends(get_central_db),
+    _: bool = Depends(require_platform_admin),
+):
+    """Activate / update a tenant's paid modules by setting its signed license.
+
+    Platform super-admin only — this is how the deployer turns modules on for a
+    tenant in the central multi-tenant stack (a per-clinic stack uses the
+    ``LICENSE`` env var instead). An empty string clears the license (free tier).
+    The token is validated before being stored so a bad license can't be saved.
+    """
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant non trouve")
+    token = (license or "").strip()
+    if token and not verify_license(token, expected_slug=tenant.slug):
+        raise HTTPException(
+            status_code=400,
+            detail="Licence invalide (signature, expiration ou tenant non concordant).",
+        )
+    tenant.license = token or None
+    db.commit()
+    db.refresh(tenant)
+    return _with_modules(tenant)
 
 
 @router.post("/tenants/{tenant_id}/assign-user")

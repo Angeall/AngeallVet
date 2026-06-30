@@ -8,12 +8,16 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Paid modules unlocked for this tenant (UX only — the backend is the real
+  // gate, so this list can't unlock anything on its own).
+  const [modules, setModules] = useState([]);
 
   // Exchange the current PocketBase session for an application JWT + profile.
   const establishSession = async () => {
     const { data } = await authAPI.session(pb.authStore.token);
     setAppToken(data.access_token);
     setUser(data.user);
+    setModules(data.modules || []);
     return data.user;
   };
 
@@ -69,12 +73,15 @@ export function AuthProvider({ children }) {
     pb.authStore.clear();
     setAppToken(null);
     setUser(null);
+    setModules([]);
     // Purge du cache hors ligne : aucune donnée patient ne reste au repos.
     await clearOfflineCache();
   };
 
+  const hasModule = (key) => modules.includes(key);
+
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, setUser, loading, login, logout, modules, hasModule }}>
       {children}
     </AuthContext.Provider>
   );
@@ -84,4 +91,11 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
+}
+
+// Convenience hook for gating paid features in the UI. Remember this is cosmetic:
+// every paid action is also enforced server-side.
+export function useModules() {
+  const { modules, hasModule } = useAuth();
+  return { modules, hasModule };
 }
