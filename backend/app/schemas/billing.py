@@ -64,6 +64,7 @@ class InvoiceResponse(BaseModel):
     veterinarians: List[InvoiceVeterinarianResponse] = []
     created_at: datetime
     client_name: Optional[str] = None
+    invoice_ninja_invoice_id: Optional[str] = None
 
     class Config:
         from_attributes = True

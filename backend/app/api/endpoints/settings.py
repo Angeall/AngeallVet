@@ -27,6 +27,7 @@ def get_clinic_settings(
         db.add(settings)
         db.commit()
         db.refresh(settings)
+    settings.invoice_ninja_token_set = bool(settings.invoice_ninja_token)
     return settings
 
 
@@ -47,6 +48,7 @@ def update_clinic_settings(
 
     db.commit()
     db.refresh(settings)
+    settings.invoice_ninja_token_set = bool(settings.invoice_ninja_token)
     return settings
 
 

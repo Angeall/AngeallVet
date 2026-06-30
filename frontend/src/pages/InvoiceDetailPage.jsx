@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { billingAPI, clientsAPI, animalsAPI, settingsAPI, authAPI } from '../services/api';
+import { downloadBlob } from '../services/download';
 import toast from 'react-hot-toast';
 
 const statusLabels = {
@@ -54,6 +55,27 @@ export default function InvoiceDetailPage() {
       load();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur');
+    }
+  };
+
+  const [sending, setSending] = useState(false);
+  const handleSendInvoiceNinja = async () => {
+    setSending(true);
+    try {
+      const res = await billingAPI.sendInvoice(id);
+      toast.success(res.data.channel === 'peppol' ? 'Facture transmise (Peppol)' : 'Facture envoyee par e-mail');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur Invoice Ninja');
+    } finally {
+      setSending(false);
+    }
+  };
+  const handleDownloadInvoicePdf = async () => {
+    try {
+      downloadBlob(await billingAPI.invoicePdf(id), `${invoice.invoice_number}.pdf`);
+    } catch {
+      toast.error('PDF indisponible — envoyez d\'abord la facture');
     }
   };
 
@@ -272,6 +294,14 @@ export default function InvoiceDetailPage() {
           <span className={`badge badge-${statusColors[invoice.status]}`}>
             {statusLabels[invoice.status]}
           </span>
+          {invoice.status !== 'cancelled' && (
+            <button className="btn btn-secondary" onClick={handleSendInvoiceNinja} disabled={sending}>
+              {sending ? 'Envoi…' : 'Envoyer via Invoice Ninja'}
+            </button>
+          )}
+          {invoice.invoice_ninja_invoice_id && (
+            <button className="btn btn-secondary" onClick={handleDownloadInvoicePdf}>Telecharger le PDF</button>
+          )}
           {invoice.status !== 'paid' && invoice.status !== 'cancelled' && remaining > 0 && (
             <>
               <button className="btn btn-secondary" onClick={openDebtAcknowledgment}>

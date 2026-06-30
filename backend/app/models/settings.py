@@ -21,6 +21,9 @@ class ClinicSettings(Base):
     logo_url = Column(String(500))
     default_appointment_duration_minutes = Column(Integer, default=30)
     debt_acknowledgment_template = Column(Text)
+    # Invoice Ninja integration (per tenant): offloads invoice PDF + Peppol e-invoicing.
+    invoice_ninja_url = Column(String(500))
+    invoice_ninja_token = Column(String(255))
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 

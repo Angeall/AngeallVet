@@ -18,6 +18,8 @@ class ClinicSettingsUpdate(BaseModel):
     logo_url: Optional[str] = None
     default_appointment_duration_minutes: Optional[int] = None
     debt_acknowledgment_template: Optional[str] = None
+    invoice_ninja_url: Optional[str] = None
+    invoice_ninja_token: Optional[str] = None
 
 
 class ClinicSettingsResponse(BaseModel):
@@ -35,6 +37,8 @@ class ClinicSettingsResponse(BaseModel):
     logo_url: Optional[str] = None
     default_appointment_duration_minutes: Optional[int] = 30
     debt_acknowledgment_template: Optional[str] = None
+    invoice_ninja_url: Optional[str] = None
+    invoice_ninja_token_set: bool = False
     updated_at: Optional[datetime] = None
 
     class Config:

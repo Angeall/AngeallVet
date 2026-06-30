@@ -9,7 +9,10 @@ export default function SettingsPage() {
     clinic_name: '', address: '', city: '', postal_code: '', country: 'France',
     phone: '', email: '', siret: '', ape_code: '', vat_number: '', logo_url: '',
     default_appointment_duration_minutes: 30, debt_acknowledgment_template: '',
+    invoice_ninja_url: '',
   });
+  const [injToken, setInjToken] = useState('');
+  const [injTokenSet, setInjTokenSet] = useState(false);
   const [vatRates, setVatRates] = useState([]);
   const [vatForm, setVatForm] = useState({ rate: '', label: '', is_default: false });
   const [showVatForm, setShowVatForm] = useState(false);
@@ -61,7 +64,9 @@ export default function SettingsPage() {
         logo_url: data.logo_url || '',
         default_appointment_duration_minutes: data.default_appointment_duration_minutes || 30,
         debt_acknowledgment_template: data.debt_acknowledgment_template || '',
+        invoice_ninja_url: data.invoice_ninja_url || '',
       });
+      setInjTokenSet(!!data.invoice_ninja_token_set);
     } catch {
       toast.error('Erreur de chargement des parametres');
     }
@@ -133,7 +138,9 @@ export default function SettingsPage() {
       const payload = Object.fromEntries(
         Object.entries(clinic).map(([k, v]) => [k, v === '' ? null : v])
       );
+      if (injToken) payload.invoice_ninja_token = injToken;
       await settingsAPI.updateClinic(payload);
+      if (injToken) { setInjTokenSet(true); setInjToken(''); }
       toast.success('Parametres mis a jour');
     } catch {
       toast.error('Erreur lors de la sauvegarde');
@@ -517,6 +524,23 @@ export default function SettingsPage() {
                 <div className="form-group">
                   <label className="form-label">Duree par defaut (minutes)</label>
                   <input type="number" className="form-input" value={clinic.default_appointment_duration_minutes} onChange={(e) => setClinic({ ...clinic, default_appointment_duration_minutes: parseInt(e.target.value) || 30 })} min="5" max="480" step="5" />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--gray-200)', margin: '20px 0', paddingTop: '20px' }}>
+              <h4 style={{ marginBottom: '4px' }}>Facturation electronique (Invoice Ninja)</h4>
+              <p style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: '12px' }}>
+                Delegue le PDF et l'e-invoicing Peppol (B2B) a ton instance Invoice Ninja.
+              </p>
+              <div className="form-row">
+                <div className="form-group" style={{ flex: 2 }}>
+                  <label className="form-label">URL de l'instance</label>
+                  <input className="form-input" value={clinic.invoice_ninja_url} onChange={(e) => setClinic({ ...clinic, invoice_ninja_url: e.target.value })} placeholder="https://facturation.ma-clinique.be" />
+                </div>
+                <div className="form-group" style={{ flex: 2 }}>
+                  <label className="form-label">Token API {injTokenSet && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}>(configure)</span>}</label>
+                  <input type="password" autoComplete="new-password" className="form-input" value={injToken} onChange={(e) => setInjToken(e.target.value)} placeholder={injTokenSet ? 'Laisser vide pour conserver' : 'Token X-Api-Token'} />
                 </div>
               </div>
             </div>

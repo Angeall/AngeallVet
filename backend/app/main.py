@@ -12,7 +12,7 @@ from app.core.database import Base, _default_engine as engine, _default_session_
 from app.api.endpoints import (
     auth, clients, animals, appointments,
     medical, inventory, billing, communication, hospitalization,
-    controlled_substances, associations, billing_rules, exports,
+    controlled_substances, associations, billing_rules, exports, invoice_sync,
 )
 from app.api.endpoints import settings as settings_endpoints
 
@@ -86,6 +86,7 @@ app.include_router(inventory.router, prefix=API_PREFIX)
 app.include_router(billing.router, prefix=API_PREFIX)
 app.include_router(billing_rules.router, prefix=API_PREFIX)
 app.include_router(exports.router, prefix=API_PREFIX)
+app.include_router(invoice_sync.router, prefix=API_PREFIX)
 app.include_router(communication.router, prefix=API_PREFIX)
 app.include_router(hospitalization.router, prefix=API_PREFIX)
 app.include_router(settings_endpoints.router, prefix=API_PREFIX)
@@ -127,6 +128,10 @@ def _ensure_schema(db_engine):
         ("controlled_substance_entries", "total_delivered", "ALTER TABLE controlled_substance_entries ADD COLUMN total_delivered NUMERIC(10,2)"),
         ("users", "sidenav_color", "ALTER TABLE users ADD COLUMN sidenav_color VARCHAR(7)"),
         ("users", "billing_program_id", "ALTER TABLE users ADD COLUMN billing_program_id INTEGER"),
+        ("clinic_settings", "invoice_ninja_url", "ALTER TABLE clinic_settings ADD COLUMN invoice_ninja_url VARCHAR(500)"),
+        ("clinic_settings", "invoice_ninja_token", "ALTER TABLE clinic_settings ADD COLUMN invoice_ninja_token VARCHAR(255)"),
+        ("clients", "invoice_ninja_client_id", "ALTER TABLE clients ADD COLUMN invoice_ninja_client_id VARCHAR(64)"),
+        ("invoices", "invoice_ninja_invoice_id", "ALTER TABLE invoices ADD COLUMN invoice_ninja_invoice_id VARCHAR(64)"),
         ("invoices", "medical_record_id", "ALTER TABLE invoices ADD COLUMN medical_record_id INTEGER REFERENCES medical_records(id)"),
         ("invoice_lines", "lot_number", "ALTER TABLE invoice_lines ADD COLUMN lot_number VARCHAR(100)"),
         ("medical_record_products", "lot_number", "ALTER TABLE medical_record_products ADD COLUMN lot_number VARCHAR(100)"),

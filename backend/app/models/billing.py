@@ -47,6 +47,7 @@ class Invoice(Base):
     notes = Column(Text)
     medical_record_id = Column(Integer, ForeignKey("medical_records.id"), nullable=True, index=True)
     estimate_id = Column(Integer, ForeignKey("estimates.id"), index=True)
+    invoice_ninja_invoice_id = Column(String(64), index=True)
     created_by_id = Column(Integer, ForeignKey("users.id"), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
