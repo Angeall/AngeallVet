@@ -8,6 +8,7 @@ application-JWT verification (signed with the default tenant secret).
 import uuid
 from unittest.mock import patch
 
+from app.core.config import settings
 from app.models.user import UserRole
 
 
@@ -84,6 +85,35 @@ def test_register_with_mocked_pocketbase(client, auth_headers):
     assert data["email"] == "new@test.com"
     assert data["role"] == "assistant"
     assert data["pb_user_id"] == fake_uid
+
+
+def test_register_blocked_at_seat_cap(client, auth_headers, monkeypatch):
+    """At the seat cap, register is refused before any PocketBase side effect."""
+    monkeypatch.setattr(settings, "MAX_USERS", 1)  # only the admin fits
+    called = {"pb": False}
+    with patch("app.api.endpoints.auth.pb_admin_token", side_effect=lambda *a, **k: called.__setitem__("pb", True)):
+        response = client.post(
+            "/api/v1/auth/register",
+            headers=auth_headers,
+            json={"email": "extra@test.com", "password": "password123", "first_name": "E", "last_name": "X"},
+        )
+    assert response.status_code == 403
+    assert "Limite" in response.json()["detail"]
+    assert called["pb"] is False  # never reached PocketBase
+
+
+def test_register_allowed_under_seat_cap(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_USERS", 10)
+    with patch("app.api.endpoints.auth.pb_admin_token", return_value="t"), patch(
+        "app.api.endpoints.auth.pb_create_user",
+        return_value={"id": str(uuid.uuid4()), "email": "ok@test.com"},
+    ):
+        response = client.post(
+            "/api/v1/auth/register",
+            headers=auth_headers,
+            json={"email": "ok@test.com", "password": "password123", "first_name": "O", "last_name": "K"},
+        )
+    assert response.status_code == 201
 
 
 def test_register_requires_admin(client, vet_headers):

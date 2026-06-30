@@ -57,6 +57,8 @@ class TokenResponse(BaseModel):
     # license server-side — the frontend uses it for UX only (the backend is the
     # real gate), so editing it client-side unlocks nothing.
     modules: list[str] = []
+    # Seat cap (0 = unlimited, admin included). UX hint; enforced server-side.
+    max_users: int = 0
 
 
 # Role permissions

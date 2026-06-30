@@ -86,3 +86,42 @@ def test_configured_key_ignores_dev_default(monkeypatch):
     assert lic.resolve_modules("default", "") == frozenset()
     token = lic.sign_license(priv, ["sms"])
     assert lic.resolve_modules("default", token) == frozenset({"sms"})
+
+
+# ─── Seat cap (max_users) ────────────────────────────────────────────────────
+
+def test_license_grants_max_users(keys):
+    priv, _ = keys
+    token = lic.sign_license(priv, ["sms"], max_users=5)
+    assert lic.resolve_max_users("default", token) == 5
+
+
+def test_license_cap_only_no_modules(keys):
+    priv, _ = keys
+    token = lic.sign_license(priv, [], max_users=3)  # a cap-only license is valid
+    assert lic.resolve_max_users("default", token) == 3
+    assert lic.verify_license(token) == frozenset()
+
+
+def test_max_users_unlimited_when_absent(keys):
+    priv, _ = keys
+    token = lic.sign_license(priv, ["sms"])  # no max_users claim → unlimited
+    assert lic.resolve_max_users("default", token) == 0
+
+
+def test_max_users_tampered_is_zero(keys):
+    priv, _ = keys
+    token = lic.sign_license(priv, ["sms"], max_users=5)
+    assert lic.resolve_max_users("default", token[:-4] + "AAAA") == 0
+
+
+def test_max_users_env_fallback_without_key(monkeypatch):
+    monkeypatch.setattr(settings, "LICENSE_PUBLIC_KEY", "")
+    monkeypatch.setattr(settings, "MAX_USERS", 4)
+    assert lic.resolve_max_users("default", "") == 4
+
+
+def test_sign_rejects_empty_license(keys):
+    priv, _ = keys
+    with pytest.raises(lic.LicenseError):
+        lic.sign_license(priv, [])  # no modules and no cap = pointless

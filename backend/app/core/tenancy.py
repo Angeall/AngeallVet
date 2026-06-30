@@ -38,6 +38,9 @@ class TenantContext:
     # Paid modules unlocked for this tenant (from its signed license). Read by
     # the ``require_module`` dependency to gate paid endpoints server-side.
     modules: frozenset = frozenset()
+    # Seat cap for this tenant (0 = unlimited, admin included). Enforced when
+    # creating users; from the signed license or the MAX_USERS env fallback.
+    max_users: int = 0
 
 
 def derive_tenant_secret(slug: str) -> str:
@@ -59,7 +62,7 @@ def default_tenant_context() -> TenantContext:
     This is the path used by the common "one Docker stack per clinic" model:
     the clinic's modules come from the signed ``LICENSE`` in its own ``.env``.
     """
-    from app.core.licensing import resolve_modules
+    from app.core.licensing import resolve_modules, resolve_max_users
 
     slug = settings.DEFAULT_TENANT_SLUG
     return TenantContext(
@@ -71,6 +74,7 @@ def default_tenant_context() -> TenantContext:
         jwt_secret=derive_tenant_secret(slug),
         is_default=True,
         modules=resolve_modules(slug, settings.LICENSE),
+        max_users=resolve_max_users(slug, settings.LICENSE),
     )
 
 
@@ -101,11 +105,12 @@ def extract_subdomain(host: str) -> Optional[str]:
 
 
 def _context_from_tenant(t) -> TenantContext:
-    from app.core.licensing import resolve_modules
+    from app.core.licensing import resolve_modules, resolve_max_users
 
     # A central stack serving several tenants stores each tenant's signed license
     # on its registry row (``tenants.license``); a per-clinic stack uses the
     # default-tenant path above instead.
+    lic = getattr(t, "license", "") or ""
     return TenantContext(
         slug=t.slug,
         db_url=t.database_url,
@@ -114,7 +119,8 @@ def _context_from_tenant(t) -> TenantContext:
         pb_admin_password=t.pb_admin_password or settings.POCKETBASE_ADMIN_PASSWORD,
         jwt_secret=derive_tenant_secret(t.slug),
         is_default=False,
-        modules=resolve_modules(t.slug, getattr(t, "license", "") or ""),
+        modules=resolve_modules(t.slug, lic),
+        max_users=resolve_max_users(t.slug, lic),
     )
 
 

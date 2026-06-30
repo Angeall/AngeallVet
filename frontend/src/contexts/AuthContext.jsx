@@ -11,6 +11,8 @@ export function AuthProvider({ children }) {
   // Paid modules unlocked for this tenant (UX only — the backend is the real
   // gate, so this list can't unlock anything on its own).
   const [modules, setModules] = useState([]);
+  // Seat cap from the subscription (0 = unlimited). UX hint; enforced server-side.
+  const [maxUsers, setMaxUsers] = useState(0);
 
   // Exchange the current PocketBase session for an application JWT + profile.
   const establishSession = async () => {
@@ -18,6 +20,7 @@ export function AuthProvider({ children }) {
     setAppToken(data.access_token);
     setUser(data.user);
     setModules(data.modules || []);
+    setMaxUsers(data.max_users || 0);
     return data.user;
   };
 
@@ -74,6 +77,7 @@ export function AuthProvider({ children }) {
     setAppToken(null);
     setUser(null);
     setModules([]);
+    setMaxUsers(0);
     // Purge du cache hors ligne : aucune donnée patient ne reste au repos.
     await clearOfflineCache();
   };
@@ -81,7 +85,7 @@ export function AuthProvider({ children }) {
   const hasModule = (key) => modules.includes(key);
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, login, logout, modules, hasModule }}>
+    <AuthContext.Provider value={{ user, setUser, loading, login, logout, modules, hasModule, maxUsers }}>
       {children}
     </AuthContext.Provider>
   );

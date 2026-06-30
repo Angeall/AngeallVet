@@ -71,30 +71,33 @@ def _normalize_pem(value: str) -> str:
 
 # ─── Verification (runs in the app; PUBLIC key only) ─────────────────────────
 
-def verify_license(token: str, *, expected_slug: Optional[str] = None) -> frozenset:
-    """Verify a signed license and return the modules it grants.
+def _verified_payload(token: str, expected_slug: Optional[str] = None):
+    """Decode + verify a license, returning its claims dict, or ``None``.
 
     Fails **closed**: any signature / format / expiry / tenant-binding problem
-    yields an empty set (no modules) rather than raising, so a tampered or
-    missing license simply unlocks nothing.
+    yields ``None`` rather than raising.
     """
     public_key = _normalize_pem(settings.LICENSE_PUBLIC_KEY)
     if not token or not public_key:
-        return frozenset()
+        return None
     try:
         payload = jwt.decode(token, public_key, algorithms=[_ALG])
     except jwt.InvalidTokenError as exc:
         logger.warning("Licence refusée (signature/format/expiration): %s", exc)
-        return frozenset()
-
+        return None
     # Anti-copy: a license bound to a tenant (``sub``) is valid only for that
     # tenant, so clinic A's paid license can't be dropped into clinic B's .env.
     sub = payload.get("sub")
     if sub and expected_slug and sub != expected_slug:
         logger.warning("Licence refusée : liée au tenant %r, pas %r", sub, expected_slug)
-        return frozenset()
+        return None
+    return payload
 
-    return _clean(payload.get("modules") or [])
+
+def verify_license(token: str, *, expected_slug: Optional[str] = None) -> frozenset:
+    """Verify a signed license and return the modules it grants (fails closed)."""
+    payload = _verified_payload(token, expected_slug)
+    return _clean(payload.get("modules") or []) if payload else frozenset()
 
 
 def resolve_modules(slug: str, license_token: str) -> frozenset:
@@ -115,6 +118,23 @@ def resolve_modules(slug: str, license_token: str) -> frozenset:
         return ALL_MODULES
     # Production with no public key set: nothing is unlocked (fail closed).
     return frozenset()
+
+
+def resolve_max_users(slug: str, license_token: str) -> int:
+    """Effective seat cap for a tenant (0 = unlimited, admin included).
+
+    Like the module resolution, the signed license's ``max_users`` claim is
+    authoritative once ``LICENSE_PUBLIC_KEY`` is configured — so a clinic can't
+    raise its own cap by editing the ``.env``. Without a public key (dev or an
+    unsigned single-clinic stack) the plain ``MAX_USERS`` env var applies.
+    """
+    if settings.LICENSE_PUBLIC_KEY:
+        payload = _verified_payload(license_token, expected_slug=slug)
+        try:
+            return max(0, int((payload or {}).get("max_users", 0) or 0))
+        except (TypeError, ValueError):
+            return 0
+    return max(0, settings.MAX_USERS)
 
 
 # ─── Signing & key generation (deployer side — needs the PRIVATE key) ────────
@@ -143,17 +163,23 @@ def sign_license(
     *,
     tenant: Optional[str] = None,
     days: Optional[int] = None,
+    max_users: Optional[int] = None,
 ) -> str:
     """Sign a license token. Run on the deployer's machine with the private key."""
     mods = sorted(_clean(modules))
-    if not mods:
-        raise LicenseError("Aucun module valide. Connus : " + ", ".join(sorted(ALL_MODULES)))
+    if not mods and not max_users:
+        raise LicenseError(
+            "Une licence doit accorder au moins un module ou un plafond d'utilisateurs. "
+            "Modules connus : " + ", ".join(sorted(ALL_MODULES))
+        )
     now = int(time.time())
     payload = {"modules": mods, "iat": now}
     if tenant:
         payload["sub"] = tenant
     if days:
         payload["exp"] = now + days * 86400
+    if max_users:
+        payload["max_users"] = int(max_users)
     return jwt.encode(payload, _normalize_pem(private_key_pem), algorithm=_ALG)
 
 
@@ -170,9 +196,10 @@ def _main() -> None:  # pragma: no cover - operational tooling
 
     sign = sub.add_parser("sign", help="Sign a license (needs the private key)")
     sign.add_argument("--key", required=True, help="Path to the private key PEM, or '-' for stdin")
-    sign.add_argument("--modules", required=True, help="Comma list, e.g. sms,invoice_ninja,google_calendar")
+    sign.add_argument("--modules", default="", help="Comma list, e.g. sms,invoice_ninja (optional if --max-users)")
     sign.add_argument("--tenant", help="Bind the license to this tenant slug (recommended)")
     sign.add_argument("--days", type=int, help="Validity in days (omit = perpetual)")
+    sign.add_argument("--max-users", type=int, dest="max_users", help="Seat cap, admin included (omit = unlimited)")
 
     inspect = sub.add_parser("inspect", help="Decode a token WITHOUT verifying")
     inspect.add_argument("--token", required=True)
@@ -195,7 +222,7 @@ def _main() -> None:  # pragma: no cover - operational tooling
     if args.cmd == "sign":
         key = sys.stdin.read() if args.key == "-" else open(args.key, "r", encoding="utf-8").read()
         modules = [m.strip() for m in args.modules.split(",") if m.strip()]
-        token = sign_license(key, modules, tenant=args.tenant, days=args.days)
+        token = sign_license(key, modules, tenant=args.tenant, days=args.days, max_users=args.max_users)
         print(token)
         return
 

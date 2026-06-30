@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     # modules are enabled. Optionally restrict here (comma list). Ignored as soon
     # as a public key is configured, and always ignored in production.
     DEV_MODULES: str = ""
+    # Maximum number of (active) users the admin can create, admin included.
+    # 0 = unlimited. This is the plain-.env knob used when no public key is set;
+    # in production the signed license's `max_users` claim takes over (so a
+    # clinic can't lift its own seat cap by editing .env). See app/core/licensing.
+    MAX_USERS: int = 0
 
     # Email
     SMTP_HOST: str = ""

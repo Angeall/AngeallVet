@@ -68,6 +68,7 @@ def _issue_session(db: Session, request: Request, record: dict, pb_token: str) -
         refresh_token=pb_token,
         user=UserResponse.model_validate(user),
         modules=sorted(tenant.modules),
+        max_users=tenant.max_users,
     )
 
 
@@ -85,6 +86,14 @@ def register(
         raise HTTPException(status_code=400, detail="Email déjà utilisé")
 
     tenant = tenant_from_request(request)
+    # Seat cap (from the subscription / signed license): refuse before any
+    # side effect (no orphan PocketBase account) once the limit is reached.
+    if tenant.max_users and db.query(User).filter(User.is_active == True).count() >= tenant.max_users:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Limite d'utilisateurs atteinte ({tenant.max_users}). "
+                   "Mettez à niveau votre abonnement pour en ajouter.",
+        )
     admin_token = pb_admin_token(tenant.pocketbase_url, tenant.pb_admin_email, tenant.pb_admin_password)
     record = pb_create_user(
         tenant.pocketbase_url,
@@ -142,15 +151,23 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/modules")
-def get_modules(request: Request, current_user: User = Depends(get_current_user)):
-    """Paid modules unlocked for the current tenant (UX hint; backend is the gate).
+def get_modules(
+    request: Request,
+    db: Session = Depends(get_request_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Paid modules + seat cap for the current tenant (UX hint; backend is the gate).
 
     Derived from the tenant's signed license — read-only and untrusted on the
-    client side. ``available`` lists every module the product offers.
+    client side. ``available`` lists every module the product offers; ``max_users``
+    is the seat cap (0 = unlimited) and ``user_count`` the current active users.
     """
+    tenant = tenant_from_request(request)
     return {
-        "modules": sorted(tenant_from_request(request).modules),
+        "modules": sorted(tenant.modules),
         "available": sorted(ALL_MODULES),
+        "max_users": tenant.max_users,
+        "user_count": db.query(User).filter(User.is_active == True).count(),
     }
 
 

@@ -35,7 +35,7 @@ const DEFAULT_PERMISSIONS = {
 };
 
 export default function UsersPage() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, maxUsers } = useAuth();
   const [users, setUsers] = useState([]);
   const [tab, setTab] = useState('users');
   const [showForm, setShowForm] = useState(false);
@@ -124,6 +124,9 @@ export default function UsersPage() {
     }
   };
 
+  const activeCount = users.filter((u) => u.is_active).length;
+  const atCap = maxUsers > 0 && activeCount >= maxUsers;
+
   if (currentUser?.role !== 'admin') {
     return (
       <div className="empty-state">
@@ -138,10 +141,22 @@ export default function UsersPage() {
       <div className="page-header">
         <div className="page-header-left">
           <h1 className="page-title">Utilisateurs & Roles</h1>
+          {maxUsers > 0 && (
+            <span style={{ color: atCap ? 'var(--red, #ef4444)' : 'var(--gray-400)', fontSize: '0.85rem' }}>
+              {activeCount} / {maxUsers} utilisateurs (abonnement)
+            </span>
+          )}
         </div>
         <div className="page-header-actions">
           {tab === 'users' && (
-            <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ Nouvel utilisateur</button>
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowForm(!showForm)}
+              disabled={atCap}
+              title={atCap ? `Limite de ${maxUsers} utilisateurs atteinte` : undefined}
+            >
+              + Nouvel utilisateur
+            </button>
           )}
         </div>
       </div>
@@ -153,6 +168,11 @@ export default function UsersPage() {
 
       {tab === 'users' && (
         <>
+          {atCap && (
+            <div style={{ background: 'var(--red-50, #fef2f2)', border: '1px solid var(--red-200, #fecaca)', color: 'var(--red-700, #b91c1c)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>
+              Limite de {maxUsers} utilisateurs atteinte (votre abonnement). Désactivez un compte ou faites évoluer votre abonnement pour en ajouter.
+            </div>
+          )}
           {showForm && (
             <div className="card">
               <h3 className="card-title" style={{ marginBottom: '16px' }}>Nouvel utilisateur</h3>
