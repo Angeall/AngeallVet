@@ -13,7 +13,8 @@ Ce guide explique comment **débloquer un module payant** (`sms`, `invoice_ninja
 >
 > Un module ne fonctionne que si **les deux** sont en place.
 
-Modules disponibles (clés exactes) : `sms`, `invoice_ninja`, `google_calendar`.
+Modules disponibles (clés exactes) : `sms`, `invoice_ninja`, `google_calendar`,
+`accounting`.
 
 ---
 
@@ -76,7 +77,7 @@ Sortie : **le jeton de licence** (une longue chaîne) à coller dans le `.env`.
 | Option | Rôle |
 |---|---|
 | `--key` | chemin vers la clé **privée** (ou `-` pour stdin) |
-| `--modules` | liste séparée par des virgules : `sms`, `invoice_ninja`, `google_calendar`. Optionnel si `--max-users` est fourni (licence « plafond seul ») |
+| `--modules` | liste séparée par des virgules : `sms`, `invoice_ninja`, `google_calendar`, `accounting`. Optionnel si `--max-users` est fourni (licence « plafond seul ») |
 | `--tenant` | **lie** la licence à ce *slug* (anti-copie : la licence de la clinique A ne marche pas chez B). Doit correspondre au `DEFAULT_TENANT_SLUG` de la clinique — voir étape 2 |
 | `--max-users` | nombre max d'utilisateurs actifs (admin inclus). Omettre = illimité |
 | `--days` | validité en jours. Omettre = permanente |
@@ -160,6 +161,13 @@ GOOGLE_REDIRECT_URI=https://<domaine-clinique>/api/v1/agenda/google/callback
 
 Le flux iCal (abonnement lecture seule) ne demande **aucune** config
 supplémentaire ; l'OAuth bidirectionnel demande les clés ci-dessus.
+
+### `accounting` — rien à configurer
+
+Aucun identifiant de service : la licence débloque simplement la page
+**Comptabilité** (clôture de caisse + export journal/FEC), accessible aux rôles
+**admin** et **comptable**. Une fois une journée clôturée, plus aucun
+encaissement ne peut y être ajouté (intégrité).
 
 ---
 

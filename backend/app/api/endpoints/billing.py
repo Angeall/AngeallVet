@@ -16,6 +16,7 @@ from app.models.billing import (
 from app.models.client import Client
 from app.models.inventory import Product, StockMovement
 from app.models.settings import ClinicSettings
+from app.models.accounting import CashRegisterClosing
 from app.schemas.billing import (
     InvoiceCreate, InvoiceUpdate, InvoiceResponse,
     EstimateCreate, EstimateResponse,
@@ -136,6 +137,7 @@ def create_invoice(
         invoice_number=invoice_number,
         client_id=data.client_id,
         animal_id=data.animal_id,
+        issue_date=date.today(),
         due_date=data.due_date,
         notes=data.notes,
         created_by_id=current_user.id,
@@ -256,6 +258,14 @@ def record_payment(
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
+    # A closed cash day is final (accounting module): no new payment can land on
+    # a day already reconciled. Payments are always dated today (server default).
+    if db.query(CashRegisterClosing).filter(CashRegisterClosing.business_date == date.today()).first():
+        raise HTTPException(
+            status_code=403,
+            detail="Journée clôturée : aucun encaissement ne peut plus y être ajouté.",
+        )
+
     invoice = db.query(Invoice).filter(Invoice.id == data.invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
@@ -263,6 +273,7 @@ def record_payment(
     payment = Payment(
         **data.model_dump(),
         received_by_id=current_user.id,
+        payment_date=date.today(),
     )
     db.add(payment)
 

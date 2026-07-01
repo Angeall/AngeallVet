@@ -9,7 +9,7 @@ const ROUTES = [
   '/', '/agenda', '/waiting-room', '/clients', '/animals', '/hospitalization',
   '/associations', '/inventory', '/controlled-substances', '/invoices',
   '/estimates', '/sales', '/debts', '/stats', '/communications', '/users',
-  '/billing-rules', '/settings',
+  '/billing-rules', '/accounting', '/settings',
 ];
 
 const EMPTY_STATS = {
@@ -26,6 +26,12 @@ async function extraMocks(page) {
   await page.route('**/api/v1/settings/clinic**', json({ id: 1, clinic_name: 'Clinique', country: 'France' }));
   await page.route('**/api/v1/billing/commissions**', json({ veterinarians: [], total: 0 }));
   await page.route('**/api/v1/auth/modules**', json({ modules: [], available: [] }));
+  await page.route('**/api/v1/accounting/cash/day**', json({
+    date: '2026-07-01', totals_by_method: { cash: 120, card: 80 }, method_labels: {},
+    total: 200, payment_count: 5, cash_payments: 120, cash_in: 0, cash_out: 0,
+    cash_movement_net: 120, movements: [], closed: false, closing: null,
+  }));
+  await page.route('**/api/v1/accounting/cash/closings**', json([]));
 }
 
 async function hOverflow(page) {

@@ -131,6 +131,16 @@ export const appointmentsAPI = {
   waitingRoom: (params) => api.get('/appointments/waiting-room', { params }),
 };
 
+// Accounting — cash register closing + export (accounting module)
+export const accountingAPI = {
+  cashDay: (day) => api.get('/accounting/cash/day', { params: day ? { day } : {} }),
+  addMovement: (data) => api.post('/accounting/cash/movements', data),
+  closeDay: (data) => api.post('/accounting/cash/close', data),
+  listClosings: (params) => api.get('/accounting/cash/closings', { params }),
+  exportJournal: (params) => api.get('/accounting/export/journal', { params, responseType: 'blob' }),
+  exportFec: (params) => api.get('/accounting/export/fec', { params, responseType: 'blob' }),
+};
+
 // Agenda — personal iCal feed + Google Calendar two-way sync (google_calendar module)
 export const agendaAPI = {
   icalStatus: () => api.get('/agenda/ical'),
