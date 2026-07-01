@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { billingAPI, clientsAPI, animalsAPI, settingsAPI, authAPI } from '../services/api';
 import { downloadBlob } from '../services/download';
+import { escapeHtml } from '../utils/escapeHtml';
 import { useModules } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -212,7 +213,7 @@ export default function InvoiceDetailPage() {
     const inv = debtData.invoice;
     const today = new Date().toLocaleDateString('fr-FR');
 
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>Reconnaissance de dette - ${inv.invoice_number}</title>
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Reconnaissance de dette - ${escapeHtml(inv.invoice_number)}</title>
       <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; color: #333; line-height: 1.6; }
         h1 { text-align: center; font-size: 1.4rem; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 1px; }
@@ -233,33 +234,33 @@ export default function InvoiceDetailPage() {
       <div class="header">
         <div class="header-block">
           <h3>Creancier</h3>
-          <p><strong>${clinic.clinic_name || ''}</strong></p>
-          <p>${clinic.address || ''}</p>
-          <p>${clinic.postal_code || ''} ${clinic.city || ''}</p>
-          ${clinic.siret ? `<p>SIRET : ${clinic.siret}</p>` : ''}
-          ${clinic.vat_number ? `<p>TVA : ${clinic.vat_number}</p>` : ''}
+          <p><strong>${escapeHtml(clinic.clinic_name || '')}</strong></p>
+          <p>${escapeHtml(clinic.address || '')}</p>
+          <p>${escapeHtml(clinic.postal_code || '')} ${escapeHtml(clinic.city || '')}</p>
+          ${clinic.siret ? `<p>SIRET : ${escapeHtml(clinic.siret)}</p>` : ''}
+          ${clinic.vat_number ? `<p>TVA : ${escapeHtml(clinic.vat_number)}</p>` : ''}
         </div>
         <div class="header-block">
           <h3>Debiteur</h3>
-          <p><strong>${client.last_name} ${client.first_name}</strong></p>
-          <p>${client.address || ''}</p>
-          <p>${client.postal_code || ''} ${client.city || ''}</p>
-          ${client.vat_number ? `<p>TVA : ${client.vat_number}</p>` : ''}
+          <p><strong>${escapeHtml(client.last_name)} ${escapeHtml(client.first_name)}</strong></p>
+          <p>${escapeHtml(client.address || '')}</p>
+          <p>${escapeHtml(client.postal_code || '')} ${escapeHtml(client.city || '')}</p>
+          ${client.vat_number ? `<p>TVA : ${escapeHtml(client.vat_number)}</p>` : ''}
         </div>
       </div>
       <hr class="separator" />
       <div class="content">
-        <p>Je soussigne(e), <strong>${client.last_name} ${client.first_name}</strong>, reconnais devoir a
-        <strong>${clinic.clinic_name || 'la clinique veterinaire'}</strong> la somme de :</p>
+        <p>Je soussigne(e), <strong>${escapeHtml(client.last_name)} ${escapeHtml(client.first_name)}</strong>, reconnais devoir a
+        <strong>${escapeHtml(clinic.clinic_name || 'la clinique veterinaire')}</strong> la somme de :</p>
       </div>
       <div class="amount">${inv.remaining.toFixed(2)} EUR</div>
       <div class="content">
-        <p>Au titre de la facture n° <strong>${inv.invoice_number}</strong> emise le ${inv.issue_date || '-'},
+        <p>Au titre de la facture n° <strong>${escapeHtml(inv.invoice_number)}</strong> emise le ${escapeHtml(inv.issue_date || '-')},
         d'un montant total de ${inv.total.toFixed(2)} EUR TTC, dont ${inv.amount_paid.toFixed(2)} EUR deja regles.</p>
         <p>Je m'engage a rembourser cette somme dans les meilleurs delais.</p>
       </div>
       <div class="content">
-        <p>Fait a ${clinic.city || '________________'}, le ${today}</p>
+        <p>Fait a ${escapeHtml(clinic.city || '________________')}, le ${today}</p>
       </div>
       <div class="signature">
         <div class="signature-block">

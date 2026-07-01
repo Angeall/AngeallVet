@@ -12,7 +12,7 @@ asyncpg==0.31.0
 # Auth (tenant-local PocketBase over HTTP; backend issues its own JWTs)
 # PocketBase is called via httpx (declared below) — no extra SDK needed.
 pyjwt[crypto]==2.13.0
-cryptography>=43.0.0
+cryptography==49.0.0  # pinned (was >=43.0.0) for reproducible, audited builds
 
 # Validation & Serialization
 pydantic==2.13.4

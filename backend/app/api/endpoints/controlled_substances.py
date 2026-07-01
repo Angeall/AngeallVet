@@ -9,6 +9,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.api.deps import get_tenant_db
+from app.core.excel import csv_safe
 from app.core.security import get_current_user, require_roles
 from app.models.user import User, UserRole
 from app.models.inventory import Product
@@ -230,7 +231,7 @@ def export_register(
         animal = animals.get(entry.patient_animal_id)
         vet_name = f"{vet.first_name} {vet.last_name}" if vet else ""
         animal_name = animal.name if animal else ""
-        writer.writerow([
+        writer.writerow([csv_safe(c) for c in [
             entry.date.isoformat() if entry.date else "",
             product.name if product else str(entry.product_id),
             type_labels.get(entry.movement_type, entry.movement_type),
@@ -242,7 +243,7 @@ def export_register(
             entry.reason or "",
             str(entry.remaining_stock),
             entry.notes or "",
-        ])
+        ]])
 
     output.seek(0)
     return StreamingResponse(

@@ -133,6 +133,19 @@ def test_cross_vet_invoice_edit_setting(client, db):
     _guard_cross_vet_edit(db, vet, vet.id)  # self is always allowed
 
 
+def test_csv_safe_neutralises_formula_injection():
+    """M5: CSV cells starting with =,+,-,@ are neutralised; separators stripped."""
+    from app.core.excel import csv_safe
+
+    assert csv_safe('=HYPERLINK("http://evil",A1)').startswith(" =")
+    assert csv_safe("+1+2") == " +1+2"
+    assert csv_safe("@SUM(1)") == " @SUM(1)"
+    assert csv_safe("-cmd") == " -cmd"
+    assert csv_safe("a\tb\r\nc") == "a b  c"
+    assert csv_safe(None) == ""
+    assert csv_safe("Chat de Jean") == "Chat de Jean"
+
+
 def test_unknown_tenant_rejected_in_strict_multitenant(client, monkeypatch):
     """In production + MULTI_TENANT, a request for an unknown tenant sub-domain is
     rejected (404) rather than silently served the default/central database."""

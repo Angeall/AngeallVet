@@ -449,7 +449,8 @@ def resolve_conflict(
                 else:
                     client.update_event(appt.google_event_id, payload)
             except gcal.GoogleCalendarError as exc:
-                raise HTTPException(status_code=502, detail=f"Google: {exc}")
+                logger.warning("Google push failed for appointment %s: %s", appt.id, exc)
+                raise HTTPException(status_code=502, detail="Échec de la synchronisation Google.")
 
     elif resolution == "keep_google" and appt:
         if c.conflict_type == "deleted_on_google":

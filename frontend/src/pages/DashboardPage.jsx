@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { appointmentsAPI, billingAPI, inventoryAPI, hospitalizationAPI, communicationsAPI } from '../services/api';
+import { escapeHtml } from '../utils/escapeHtml';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -48,23 +49,26 @@ export default function DashboardPage() {
       const w = window.open('', '_blank');
       const letters = reminders.map(r => {
         const template = r.postal_template || `Madame, Monsieur ${r.client_name},\n\nNous vous rappelons que votre animal ${r.animal_name} (${r.species || ''}) doit recevoir son rappel de vaccination "${r.vaccine_name}".\n\nDate prevue : ${r.due_date}\n\nNous vous invitons a prendre rendez-vous au plus vite.\n\nCordialement,\nVotre clinique veterinaire`;
+        // Every interpolated value is staff-editable free text → escape it (this
+        // markup is written via document.write). Escape the template first, then
+        // substitute already-escaped values into any {placeholders}.
+        const body = escapeHtml(template)
+          .replace(/\{client_name\}/g, escapeHtml(r.client_name))
+          .replace(/\{animal_name\}/g, escapeHtml(r.animal_name))
+          .replace(/\{species\}/g, escapeHtml(r.species || ''))
+          .replace(/\{vaccine_name\}/g, escapeHtml(r.vaccine_name))
+          .replace(/\{due_date\}/g, escapeHtml(r.due_date));
         return `
           <div style="page-break-after: always; padding: 40px; font-family: serif; font-size: 14px; line-height: 1.6;">
             <div style="text-align: right; margin-bottom: 40px;">
-              <strong>${r.client_name}</strong><br/>
-              ${r.client_address}<br/>
-              ${r.client_postal_code} ${r.client_city}
+              <strong>${escapeHtml(r.client_name)}</strong><br/>
+              ${escapeHtml(r.client_address)}<br/>
+              ${escapeHtml(r.client_postal_code)} ${escapeHtml(r.client_city)}
             </div>
             <div style="margin-bottom: 30px; text-align: right; font-size: 12px; color: #666;">
               Le ${new Date().toLocaleDateString('fr-FR')}
             </div>
-            <div style="white-space: pre-wrap;">${template
-              .replace(/\{client_name\}/g, r.client_name)
-              .replace(/\{animal_name\}/g, r.animal_name)
-              .replace(/\{species\}/g, r.species || '')
-              .replace(/\{vaccine_name\}/g, r.vaccine_name)
-              .replace(/\{due_date\}/g, r.due_date)
-            }</div>
+            <div style="white-space: pre-wrap;">${body}</div>
           </div>`;
       }).join('');
       w.document.write(`<html><head><title>Rappels postaux</title></head><body>${letters}</body></html>`);

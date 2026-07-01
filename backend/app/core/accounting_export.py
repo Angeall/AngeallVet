@@ -108,9 +108,13 @@ def build_fec(invoices, payments, client_names: dict, inv_map: dict | None = Non
     num = 0
 
     def emit(jrn, jrnlib, edate, compte, comptelib, aux, auxlib, piece, lib, debit, credit):
+        # A tab/CR/LF inside a text field (client name, invoice number) would
+        # corrupt the tab-separated column/row layout — strip them.
+        def c(x):
+            return str(x).replace("\t", " ").replace("\r", " ").replace("\n", " ")
         lines.append("\t".join([
-            jrn, jrnlib, str(num), _fec_date(edate), compte, comptelib,
-            aux, auxlib, piece, _fec_date(edate), lib,
+            c(jrn), c(jrnlib), str(num), _fec_date(edate), c(compte), c(comptelib),
+            c(aux), c(auxlib), c(piece), _fec_date(edate), c(lib),
             _fec_amount(debit), _fec_amount(credit), "", "", _fec_date(edate), "", "",
         ]))
 

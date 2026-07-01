@@ -32,6 +32,22 @@ def _safe_title(title, used):
     return t
 
 
+def csv_safe(v):
+    """Neutralise CSV/spreadsheet formula injection for a raw CSV cell.
+
+    A leading =,+,-,@ makes Excel/LibreOffice treat the cell as a formula; a
+    tab/CR/LF would corrupt the row/column layout. Used by the CSV exports that
+    don't go through the workbook builder (which already calls ``_cell``).
+    """
+    if v is None:
+        return ""
+    s = v if isinstance(v, str) else str(v)
+    s = s.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    if s and s[0] in _FORMULA_PREFIX:
+        s = " " + s
+    return s
+
+
 def _cell(v):
     """Coerce a value to an Excel-safe scalar, neutralising formula injection."""
     if v is None or isinstance(v, bool) or isinstance(v, (int, float)):
