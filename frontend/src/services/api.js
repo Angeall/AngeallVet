@@ -131,6 +131,17 @@ export const appointmentsAPI = {
   waitingRoom: (params) => api.get('/appointments/waiting-room', { params }),
 };
 
+// Vaccinations — protocols + administrations (vaccine_protocols module)
+export const vaccinationsAPI = {
+  listProtocols: () => api.get('/vaccinations/protocols'),
+  createProtocol: (data) => api.post('/vaccinations/protocols', data),
+  updateProtocol: (id, data) => api.put(`/vaccinations/protocols/${id}`, data),
+  deleteProtocol: (id) => api.delete(`/vaccinations/protocols/${id}`),
+  record: (data) => api.post('/vaccinations', data),
+  listForAnimal: (animalId) => api.get('/vaccinations', { params: { animal_id: animalId } }),
+  due: (withinDays = 30) => api.get('/vaccinations/due', { params: { within_days: withinDays } }),
+};
+
 // Accounting — cash register closing + export (accounting module)
 export const accountingAPI = {
   cashDay: (day) => api.get('/accounting/cash/day', { params: day ? { day } : {} }),

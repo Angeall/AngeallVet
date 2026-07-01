@@ -31,6 +31,7 @@ const UsersPage = lazy(() => import('./pages/UsersPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const BillingRulesPage = lazy(() => import('./pages/BillingRulesPage'));
 const AccountingPage = lazy(() => import('./pages/AccountingPage'));
+const VaccinesPage = lazy(() => import('./pages/VaccinesPage'));
 const ControlledSubstancesPage = lazy(() => import('./pages/ControlledSubstancesPage'));
 const AssociationsPage = lazy(() => import('./pages/AssociationsPage'));
 
@@ -79,6 +80,7 @@ function App() {
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/billing-rules" element={<BillingRulesPage />} />
                     <Route path="/accounting" element={<AccountingPage />} />
+                    <Route path="/vaccines" element={<VaccinesPage />} />
                   </Routes>
                 </Suspense>
               </Layout>

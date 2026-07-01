@@ -12,7 +12,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from app.core.config import settings
 from app.core.database import _default_session_factory, _get_tenant_session_factory
 from app.core.licensing import MODULE_GOOGLE_CALENDAR, resolve_modules
-from app.core.reminders import send_due_reminders
+from app.core.reminders import send_due_reminders, send_due_vaccination_reminders
 from app.core.google_sync import sync_all_accounts
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,9 @@ def run_all_tenants_reminders():
             counts = send_due_reminders(db, base, modules=modules)
             if counts.get("sent") or counts.get("failed"):
                 logger.info("Reminders (base=%s): %s", base, counts)
+            vax = send_due_vaccination_reminders(db, base, modules=modules)
+            if vax.get("sent") or vax.get("failed"):
+                logger.info("Vaccination reminders (base=%s): %s", base, vax)
         except Exception as exc:
             logger.warning("Reminder run failed (base=%s): %s", base, exc)
         finally:

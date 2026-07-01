@@ -9,7 +9,7 @@ const ROUTES = [
   '/', '/agenda', '/waiting-room', '/clients', '/animals', '/hospitalization',
   '/associations', '/inventory', '/controlled-substances', '/invoices',
   '/estimates', '/sales', '/debts', '/stats', '/communications', '/users',
-  '/billing-rules', '/accounting', '/settings',
+  '/billing-rules', '/accounting', '/vaccines', '/settings',
 ];
 
 const EMPTY_STATS = {
@@ -32,6 +32,9 @@ async function extraMocks(page) {
     cash_movement_net: 120, movements: [], closed: false, closing: null,
   }));
   await page.route('**/api/v1/accounting/cash/closings**', json([]));
+  await page.route('**/api/v1/vaccinations/protocols**', json([]));
+  await page.route('**/api/v1/vaccinations/due**', json([]));
+  await page.route('**/api/v1/vaccinations**', json([]));
 }
 
 async function hOverflow(page) {

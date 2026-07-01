@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { animalsAPI, medicalAPI, hospitalizationAPI, billingAPI, inventoryAPI, communicationsAPI } from '../services/api';
+import { animalsAPI, medicalAPI, hospitalizationAPI, billingAPI, inventoryAPI, communicationsAPI, vaccinationsAPI } from '../services/api';
+import { useModules } from '../contexts/AuthContext';
 import { useAnimalDetail, useCreateMedicalRecord, useAddWeight, animalDetailKey } from '../hooks/useAnimalDetail';
 import { useOfflineMutation } from '../hooks/useOfflineMutation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -84,6 +85,14 @@ export default function AnimalDetailPage() {
   const [htProductSearch, setHtProductSearch] = useState('');
   const [htProductResults, setHtProductResults] = useState([]);
 
+  // Vaccins (module vaccine_protocols)
+  const { hasModule } = useModules();
+  const vaccinesEnabled = hasModule('vaccine_protocols');
+  const [vaccinations, setVaccinations] = useState([]);
+  const [vaxProtocols, setVaxProtocols] = useState([]);
+  const [showVaxForm, setShowVaxForm] = useState(false);
+  const [vaxForm, setVaxForm] = useState({ protocol_id: '', dose_id: '', date_administered: '', lot_number: '', notes: '' });
+
   // Renseigne le formulaire d'édition à partir des données chargées (cache inclus).
   useEffect(() => {
     if (!animal) return;
@@ -100,6 +109,39 @@ export default function AnimalDetailPage() {
   useEffect(() => {
     animalsAPI.listSpecies().then(res => setSpeciesList(res.data || [])).catch(() => {});
   }, []);
+
+  const loadVaccinations = async () => {
+    if (!vaccinesEnabled || !id) return;
+    try { setVaccinations((await vaccinationsAPI.listForAnimal(id)).data || []); } catch {}
+  };
+  useEffect(() => {
+    if (!vaccinesEnabled) return;
+    loadVaccinations();
+    vaccinationsAPI.listProtocols().then(r => setVaxProtocols(r.data || [])).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vaccinesEnabled, id]);
+
+  // Protocoles applicables à l'espèce de l'animal (ou « toutes espèces »).
+  const applicableProtocols = vaxProtocols.filter(p => p.is_active && (!p.species || p.species === animal?.species));
+  const selectedVaxProtocol = applicableProtocols.find(p => String(p.id) === String(vaxForm.protocol_id));
+
+  const submitVaccination = async (e) => {
+    e.preventDefault();
+    try {
+      await vaccinationsAPI.record({
+        animal_id: parseInt(id),
+        protocol_id: vaxForm.protocol_id ? parseInt(vaxForm.protocol_id) : null,
+        dose_id: vaxForm.dose_id ? parseInt(vaxForm.dose_id) : null,
+        date_administered: vaxForm.date_administered,
+        lot_number: vaxForm.lot_number || null,
+        notes: vaxForm.notes || null,
+      });
+      toast.success('Vaccination enregistrée');
+      setShowVaxForm(false);
+      setVaxForm({ protocol_id: '', dose_id: '', date_administered: '', lot_number: '', notes: '' });
+      loadVaccinations();
+    } catch (err) { toast.error(err.response?.data?.detail || 'Erreur'); }
+  };
 
   const loadProducts = async () => {
     try {
@@ -478,9 +520,9 @@ export default function AnimalDetailPage() {
       </div>
 
       <div className="tabs">
-        {['medical', 'appointments', 'weight'].map(t => (
+        {['medical', 'appointments', 'weight', ...(vaccinesEnabled ? ['vaccines'] : [])].map(t => (
           <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
-            {t === 'medical' ? 'Dossier medical' : t === 'appointments' ? `Rendez-vous (${appointments.length})` : 'Courbe de poids'}
+            {t === 'medical' ? 'Dossier medical' : t === 'appointments' ? `Rendez-vous (${appointments.length})` : t === 'weight' ? 'Courbe de poids' : `Vaccins (${vaccinations.length})`}
           </button>
         ))}
       </div>
@@ -550,6 +592,82 @@ export default function AnimalDetailPage() {
         <div className="card">
           <div className="card-header"><h3 className="card-title">Courbe de poids</h3><form onSubmit={handleAddWeight} style={{ display: 'flex', gap: '8px' }}><input type="number" step="0.01" className="form-input" style={{ width: '120px' }} placeholder="Poids (kg)" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} /><button type="submit" className="btn btn-primary btn-sm">Ajouter</button></form></div>
           {weightChartData.length > 0 ? (<ResponsiveContainer width="100%" height={300}><LineChart data={weightChartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis unit=" kg" /><Tooltip /><Line type="monotone" dataKey="poids" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4 }} /></LineChart></ResponsiveContainer>) : <p style={{ color: 'var(--gray-400)', textAlign: 'center' }}>Aucune donnee de poids</p>}
+        </div>
+      )}
+
+      {tab === 'vaccines' && vaccinesEnabled && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">Carnet de vaccination</h3>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowVaxForm(!showVaxForm)}>+ Enregistrer une vaccination</button>
+          </div>
+
+          {showVaxForm && (
+            <form onSubmit={submitVaccination} style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Protocole</label>
+                  <select className="form-select" value={vaxForm.protocol_id} onChange={(e) => setVaxForm({ ...vaxForm, protocol_id: e.target.value, dose_id: '' })}>
+                    <option value="">— Vaccin ponctuel —</option>
+                    {applicableProtocols.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                {selectedVaxProtocol && (
+                  <div className="form-group">
+                    <label className="form-label">Dose administrée *</label>
+                    <select className="form-select" value={vaxForm.dose_id} onChange={(e) => setVaxForm({ ...vaxForm, dose_id: e.target.value })} required>
+                      <option value="">Choisir…</option>
+                      {selectedVaxProtocol.doses.map(d => <option key={d.id} value={d.id}>{d.label}{d.valence ? ` — ${d.valence}` : ''}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Date d'administration *</label>
+                  <input type="date" className="form-input" value={vaxForm.date_administered} onChange={(e) => setVaxForm({ ...vaxForm, date_administered: e.target.value })} required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">N° de lot</label>
+                  <input className="form-input" value={vaxForm.lot_number} onChange={(e) => setVaxForm({ ...vaxForm, lot_number: e.target.value })} placeholder="ex. ABC1234" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Notes</label>
+                <input className="form-input" value={vaxForm.notes} onChange={(e) => setVaxForm({ ...vaxForm, notes: e.target.value })} />
+              </div>
+              {!selectedVaxProtocol && (
+                <p style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>Sans protocole, indiquez la valence dans les notes ; aucun rappel ne sera calculé automatiquement.</p>
+              )}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <button type="submit" className="btn btn-primary">Enregistrer</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowVaxForm(false)}>Annuler</button>
+              </div>
+            </form>
+          )}
+
+          <div className="table-container">
+            <table>
+              <thead><tr><th>Date</th><th>Valence</th><th>N° lot</th><th>Prochain rappel</th><th>Vétérinaire</th></tr></thead>
+              <tbody>
+                {[...vaccinations].sort((a, b) => new Date(b.date_administered) - new Date(a.date_administered)).map(v => {
+                  const overdue = v.next_due_date && new Date(v.next_due_date) < new Date();
+                  return (
+                    <tr key={v.id}>
+                      <td>{v.date_administered}</td>
+                      <td><strong>{v.valence || '—'}</strong></td>
+                      <td>{v.lot_number || '—'}</td>
+                      <td>{v.next_due_date
+                        ? <span className={`badge badge-${overdue ? 'red' : 'teal'}`}>{v.next_due_date}{v.next_label ? ` · ${v.next_label}` : ''}</span>
+                        : <span style={{ color: 'var(--gray-400)' }}>—</span>}</td>
+                      <td>{v.veterinarian_name || '—'}</td>
+                    </tr>
+                  );
+                })}
+                {vaccinations.length === 0 && <tr><td colSpan="5" className="table-empty">Aucune vaccination enregistrée</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

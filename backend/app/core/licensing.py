@@ -40,12 +40,14 @@ MODULE_INVOICE_NINJA = "invoice_ninja"
 MODULE_SMS = "sms"
 MODULE_GOOGLE_CALENDAR = "google_calendar"
 MODULE_ACCOUNTING = "accounting"
+MODULE_VACCINE_PROTOCOLS = "vaccine_protocols"
 
 MODULE_LABELS = {
     MODULE_INVOICE_NINJA: "Facturation avancée (Invoice Ninja / Peppol)",
     MODULE_SMS: "Rappels par SMS",
     MODULE_GOOGLE_CALENDAR: "Synchronisation Google Agenda",
     MODULE_ACCOUNTING: "Comptabilité (clôture de caisse + export comptable)",
+    MODULE_VACCINE_PROTOCOLS: "Vaccins avancés (protocoles & rappels automatisés)",
 }
 ALL_MODULES = frozenset(MODULE_LABELS)
 

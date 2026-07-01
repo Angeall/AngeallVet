@@ -13,7 +13,7 @@ from app.api.endpoints import (
     auth, clients, animals, appointments,
     medical, inventory, billing, communication, hospitalization,
     controlled_substances, associations, billing_rules, exports, invoice_sync,
-    agenda, accounting,
+    agenda, accounting, vaccination,
 )
 from app.api.endpoints import settings as settings_endpoints
 
@@ -95,6 +95,7 @@ app.include_router(controlled_substances.router, prefix=API_PREFIX)
 app.include_router(associations.router, prefix=API_PREFIX)
 app.include_router(agenda.router, prefix=API_PREFIX)
 app.include_router(accounting.router, prefix=API_PREFIX)
+app.include_router(vaccination.router, prefix=API_PREFIX)
 
 # Ensure the upload directory exists. Files are NOT exposed via a public static
 # mount: medical attachments are sensitive (RGPD) and are streamed through an

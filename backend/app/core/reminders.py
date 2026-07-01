@@ -160,3 +160,100 @@ def send_due_reminders(db: Session, base_url: str = "", modules=None):
 
     db.commit()
     return counts
+
+
+# Lead time before a due vaccination at which the reminder goes out.
+VACCINE_REMINDER_LEAD_DAYS = 21
+
+
+def send_due_vaccination_reminders(db: Session, base_url: str = "", modules=None):
+    """Protocol-driven vaccination reminders (the ``vaccine_protocols`` module).
+
+    Sends e-mail (and SMS when that module is on too) for each animal's live next
+    dose due within the lead window or overdue, deduped to the latest
+    administration per (animal, valence) and to one send via ``reminder_sent``.
+    """
+    from app.core.licensing import ALL_MODULES, MODULE_VACCINE_PROTOCOLS, MODULE_SMS
+    from app.models.vaccination import Vaccination
+
+    if modules is None:
+        modules = ALL_MODULES
+    counts = {"sent": 0, "failed": 0, "skipped": 0}
+    if MODULE_VACCINE_PROTOCOLS not in modules:
+        return counts
+    sms_enabled = MODULE_SMS in modules
+
+    clinic = db.query(ClinicSettings).first()
+    clinic_name = (clinic.clinic_name if clinic else None) or settings.APP_NAME
+    clinic_email = clinic.email if clinic else None
+    cutoff = datetime.utcnow().date() + timedelta(days=VACCINE_REMINDER_LEAD_DAYS)
+
+    rows = (
+        db.query(Vaccination)
+        .filter(Vaccination.next_due_date.isnot(None))
+        .order_by(Vaccination.date_administered.desc(), Vaccination.id.desc())
+        .limit(5000).all()
+    )
+    latest = {}
+    for v in rows:
+        latest.setdefault((v.animal_id, (v.valence or "").lower()), v)
+
+    for v in latest.values():
+        if v.reminder_sent or not v.next_due_date or v.next_due_date > cutoff:
+            continue
+        animal = db.query(Animal).filter(Animal.id == v.animal_id).first()
+        if not animal:
+            continue
+        client = db.query(Client).filter(Client.id == animal.client_id).first()
+        if not client or not client.accepts_reminders:
+            counts["skipped"] += 1
+            continue
+
+        who = f"{client.first_name} {client.last_name}".strip()
+        due = v.next_due_date.strftime("%d/%m/%Y")
+        sent_any = False
+
+        if client.email:
+            body = (
+                f"Bonjour {who},\n\nLe rappel de vaccination « {v.valence} » de {animal.name} "
+                f"est prévu pour le {due}. Merci de prendre rendez-vous.\n\n{clinic_name}"
+            )
+            if base_url:
+                token = _ensure_token(db, client)
+                body += (
+                    f"\n\nPour ne plus recevoir ces rappels : "
+                    f"{base_url.rstrip('/')}/api/v1/communications/unsubscribe/{token}"
+                )
+            try:
+                send_email(client.email, f"Rappel de vaccination — {animal.name}", body,
+                           from_email=clinic_email, from_name=clinic_name)
+                db.add(Communication(client_id=client.id, channel="email",
+                                     subject=f"Rappel vaccination {animal.name}", body=body,
+                                     status="sent", sent_at=datetime.utcnow()))
+                sent_any = True
+            except MailerError as exc:
+                db.add(Communication(client_id=client.id, channel="email",
+                                     subject="Rappel vaccination", body=body,
+                                     status="failed", error_message=str(exc)))
+                counts["failed"] += 1
+
+        if sms_enabled and (client.mobile or client.phone):
+            sbody = f"{clinic_name}: rappel vaccination {v.valence} pour {animal.name} (échéance {due})."
+            try:
+                send_sms(client.mobile or client.phone, sbody)
+                db.add(Communication(client_id=client.id, channel="sms",
+                                     subject=f"Rappel vaccination {animal.name}", body=sbody,
+                                     status="sent", sent_at=datetime.utcnow()))
+                sent_any = True
+            except SmsError as exc:
+                db.add(Communication(client_id=client.id, channel="sms",
+                                     subject="Rappel vaccination", body=sbody,
+                                     status="failed", error_message=str(exc)))
+                counts["failed"] += 1
+
+        if sent_any:
+            v.reminder_sent = True
+            counts["sent"] += 1
+
+    db.commit()
+    return counts
