@@ -1,11 +1,12 @@
 import logging
 import os
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.core.security import require_permission
 
 logger = logging.getLogger(__name__)
 from app.core.database import Base, _default_engine as engine, _default_session_factory
@@ -109,24 +110,34 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # API routes
 API_PREFIX = "/api/v1"
+# Section-access matrix (H1): mutating requests in a section require the role to
+# have that section enabled (require_permission gates writes only — GET reads stay
+# open so cross-section lookups keep working). Routers with public endpoints
+# (agenda ical/oauth, communication unsubscribe) or their own stricter role gate
+# (billing_rules, controlled_substances, accounting, users, settings) are gated
+# at the endpoint level instead.
+def _perm(section):
+    return [Depends(require_permission(section))]
+
+
 app.include_router(auth.router, prefix=API_PREFIX)
-app.include_router(clients.router, prefix=API_PREFIX)
-app.include_router(animals.router, prefix=API_PREFIX)
-app.include_router(appointments.router, prefix=API_PREFIX)
-app.include_router(medical.router, prefix=API_PREFIX)
-app.include_router(inventory.router, prefix=API_PREFIX)
-app.include_router(billing.router, prefix=API_PREFIX)
+app.include_router(clients.router, prefix=API_PREFIX, dependencies=_perm("clients"))
+app.include_router(animals.router, prefix=API_PREFIX, dependencies=_perm("animals"))
+app.include_router(appointments.router, prefix=API_PREFIX, dependencies=_perm("agenda"))
+app.include_router(medical.router, prefix=API_PREFIX, dependencies=_perm("medical"))
+app.include_router(inventory.router, prefix=API_PREFIX, dependencies=_perm("inventory"))
+app.include_router(billing.router, prefix=API_PREFIX, dependencies=_perm("invoices"))
 app.include_router(billing_rules.router, prefix=API_PREFIX)
 app.include_router(exports.router, prefix=API_PREFIX)
 app.include_router(invoice_sync.router, prefix=API_PREFIX)
 app.include_router(communication.router, prefix=API_PREFIX)
-app.include_router(hospitalization.router, prefix=API_PREFIX)
+app.include_router(hospitalization.router, prefix=API_PREFIX, dependencies=_perm("hospitalization"))
 app.include_router(settings_endpoints.router, prefix=API_PREFIX)
 app.include_router(controlled_substances.router, prefix=API_PREFIX)
-app.include_router(associations.router, prefix=API_PREFIX)
+app.include_router(associations.router, prefix=API_PREFIX, dependencies=_perm("animals"))
 app.include_router(agenda.router, prefix=API_PREFIX)
 app.include_router(accounting.router, prefix=API_PREFIX)
-app.include_router(vaccination.router, prefix=API_PREFIX)
+app.include_router(vaccination.router, prefix=API_PREFIX, dependencies=_perm("animals"))
 
 # Ensure the upload directory exists. Files are NOT exposed via a public static
 # mount: medical attachments are sensitive (RGPD) and are streamed through an
@@ -168,6 +179,7 @@ def _ensure_schema(db_engine):
         ("billing_rules", "tier_basis", "ALTER TABLE billing_rules ADD COLUMN tier_basis VARCHAR(20)"),
         ("clinic_settings", "invoice_ninja_url", "ALTER TABLE clinic_settings ADD COLUMN invoice_ninja_url VARCHAR(500)"),
         ("clinic_settings", "invoice_ninja_token", "ALTER TABLE clinic_settings ADD COLUMN invoice_ninja_token VARCHAR(255)"),
+        ("clinic_settings", "allow_cross_vet_invoice_edit", "ALTER TABLE clinic_settings ADD COLUMN allow_cross_vet_invoice_edit BOOLEAN NOT NULL DEFAULT TRUE"),
         ("clients", "invoice_ninja_client_id", "ALTER TABLE clients ADD COLUMN invoice_ninja_client_id VARCHAR(64)"),
         ("invoices", "invoice_ninja_invoice_id", "ALTER TABLE invoices ADD COLUMN invoice_ninja_invoice_id VARCHAR(64)"),
         ("clients", "accepts_reminders", "ALTER TABLE clients ADD COLUMN accepts_reminders BOOLEAN NOT NULL DEFAULT true"),

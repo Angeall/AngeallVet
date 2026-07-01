@@ -194,6 +194,23 @@ def get_invoice(
     return _enrich_invoice(invoice, db)
 
 
+def _guard_cross_vet_edit(db, current_user, user_id):
+    """M1: attribution edits drive commission. In a trusted clinic (the default,
+    ClinicSettings.allow_cross_vet_invoice_edit=True) anyone billing-capable may
+    edit it; when the admin disables it, a non-admin may only (de)associate self."""
+    from app.models.settings import ClinicSettings
+    from app.models.user import UserRole
+
+    if current_user.role == UserRole.ADMIN or user_id == current_user.id:
+        return
+    s = db.query(ClinicSettings).first()
+    if s is not None and not getattr(s, "allow_cross_vet_invoice_edit", True):
+        raise HTTPException(
+            status_code=403,
+            detail="La modification des vétérinaires de la facture d'un confrère est désactivée dans cette clinique.",
+        )
+
+
 @router.post("/invoices/{invoice_id}/veterinarians", status_code=201)
 def add_invoice_veterinarian(
     invoice_id: int,
@@ -204,6 +221,7 @@ def add_invoice_veterinarian(
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
+    _guard_cross_vet_edit(db, current_user, user_id)
     existing = db.query(InvoiceVeterinarian).filter(
         InvoiceVeterinarian.invoice_id == invoice_id,
         InvoiceVeterinarian.user_id == user_id,
@@ -222,6 +240,7 @@ def remove_invoice_veterinarian(
     db: Session = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user),
 ):
+    _guard_cross_vet_edit(db, current_user, user_id)
     link = db.query(InvoiceVeterinarian).filter(
         InvoiceVeterinarian.invoice_id == invoice_id,
         InvoiceVeterinarian.user_id == user_id,

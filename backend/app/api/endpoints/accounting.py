@@ -38,6 +38,23 @@ def is_day_closed(db: Session, day: date) -> bool:
     return db.query(CashRegisterClosing).filter(CashRegisterClosing.business_date == day).first() is not None
 
 
+def _guard_business_date(db: Session, d: date) -> None:
+    """M3: cash ledger integrity. No future dates, and nothing predated before the
+    last closing (so a shortfall can't be masked by a back-dated movement/closing)."""
+    if d > date.today():
+        raise HTTPException(status_code=400, detail="Date future non autorisée.")
+    last = (
+        db.query(CashRegisterClosing.business_date)
+        .order_by(CashRegisterClosing.business_date.desc())
+        .first()
+    )
+    if last and d < last[0]:
+        raise HTTPException(
+            status_code=400,
+            detail="Impossible d'écrire sur un jour antérieur à la dernière clôture.",
+        )
+
+
 # ─── schemas ─────────────────────────────────────────────────────────────────
 
 class MovementIn(BaseModel):
@@ -126,6 +143,7 @@ def add_movement(
     _m: bool = Depends(_module),
 ):
     d = data.business_date or date.today()
+    _guard_business_date(db, d)
     if is_day_closed(db, d):
         raise HTTPException(status_code=409, detail="Journée clôturée : mouvement impossible.")
     if data.direction not in ("in", "out"):
@@ -148,6 +166,7 @@ def close_day(
     _m: bool = Depends(_module),
 ):
     d = data.business_date or date.today()
+    _guard_business_date(db, d)
     if is_day_closed(db, d):
         raise HTTPException(status_code=409, detail="Journée déjà clôturée.")
     payments, by_method, total, _movements, cash_in, cash_out = _day_figures(db, d)

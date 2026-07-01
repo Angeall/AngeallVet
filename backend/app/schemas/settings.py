@@ -17,6 +17,7 @@ class ClinicSettingsUpdate(BaseModel):
     vat_number: Optional[str] = None
     logo_url: Optional[str] = None
     default_appointment_duration_minutes: Optional[int] = None
+    allow_cross_vet_invoice_edit: Optional[bool] = None
     debt_acknowledgment_template: Optional[str] = None
     invoice_ninja_url: Optional[str] = None
     invoice_ninja_token: Optional[str] = None
@@ -36,6 +37,7 @@ class ClinicSettingsResponse(BaseModel):
     vat_number: Optional[str] = None
     logo_url: Optional[str] = None
     default_appointment_duration_minutes: Optional[int] = 30
+    allow_cross_vet_invoice_edit: bool = True
     debt_acknowledgment_template: Optional[str] = None
     invoice_ninja_url: Optional[str] = None
     invoice_ninja_token_set: bool = False

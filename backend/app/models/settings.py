@@ -20,6 +20,10 @@ class ClinicSettings(Base):
     vat_number = Column(String(50))
     logo_url = Column(String(500))
     default_appointment_duration_minutes = Column(Integer, default=30)
+    # When True (default: trusted environment), any billing-capable user may edit
+    # the veterinarians attributed to another colleague's invoice (which drives
+    # commission). Set False to restrict non-admins to their own attribution.
+    allow_cross_vet_invoice_edit = Column(Boolean, default=True)
     debt_acknowledgment_template = Column(Text)
     # Invoice Ninja integration (per tenant): offloads invoice PDF + Peppol e-invoicing.
     invoice_ninja_url = Column(String(500))

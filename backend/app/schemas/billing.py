@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
@@ -8,10 +8,10 @@ from app.models.billing import InvoiceStatus
 class InvoiceLineCreate(BaseModel):
     product_id: Optional[int] = None
     description: str
-    quantity: Decimal = Decimal("1")
-    unit_price: Decimal
-    vat_rate: Decimal = Decimal("20.00")
-    discount_percent: Decimal = Decimal("0")
+    quantity: Decimal = Field(Decimal("1"), gt=0)
+    unit_price: Decimal = Field(..., ge=0)
+    vat_rate: Decimal = Field(Decimal("20.00"), ge=0, le=100)
+    discount_percent: Decimal = Field(Decimal("0"), ge=0, le=100)
     lot_number: Optional[str] = None
 
 
@@ -73,9 +73,9 @@ class InvoiceResponse(BaseModel):
 class EstimateLineCreate(BaseModel):
     product_id: Optional[int] = None
     description: str
-    quantity: Decimal = Decimal("1")
-    unit_price: Decimal
-    vat_rate: Decimal = Decimal("20.00")
+    quantity: Decimal = Field(Decimal("1"), gt=0)
+    unit_price: Decimal = Field(..., ge=0)
+    vat_rate: Decimal = Field(Decimal("20.00"), ge=0, le=100)
 
 
 class EstimateLineResponse(EstimateLineCreate):
@@ -115,14 +115,19 @@ class EstimateResponse(BaseModel):
 
 class PaymentCreate(BaseModel):
     invoice_id: int
-    amount: Decimal
+    amount: Decimal = Field(..., gt=0)
     payment_method: str
     reference: Optional[str] = None
     notes: Optional[str] = None
 
 
-class PaymentResponse(PaymentCreate):
+class PaymentResponse(BaseModel):
     id: int
+    invoice_id: int
+    amount: Decimal
+    payment_method: str
+    reference: Optional[str] = None
+    notes: Optional[str] = None
     payment_date: Optional[date] = None
     created_at: datetime
 

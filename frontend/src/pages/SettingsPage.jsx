@@ -11,6 +11,7 @@ export default function SettingsPage() {
     clinic_name: '', address: '', city: '', postal_code: '', country: 'France',
     phone: '', email: '', siret: '', ape_code: '', vat_number: '', logo_url: '',
     default_appointment_duration_minutes: 30, debt_acknowledgment_template: '',
+    allow_cross_vet_invoice_edit: true,
     invoice_ninja_url: '',
   });
   const [injToken, setInjToken] = useState('');
@@ -66,6 +67,7 @@ export default function SettingsPage() {
         logo_url: data.logo_url || '',
         default_appointment_duration_minutes: data.default_appointment_duration_minutes || 30,
         debt_acknowledgment_template: data.debt_acknowledgment_template || '',
+        allow_cross_vet_invoice_edit: data.allow_cross_vet_invoice_edit !== false,
         invoice_ninja_url: data.invoice_ninja_url || '',
       });
       setInjTokenSet(!!data.invoice_ninja_token_set);
@@ -528,6 +530,19 @@ export default function SettingsPage() {
                   <input type="number" className="form-input" value={clinic.default_appointment_duration_minutes} onChange={(e) => setClinic({ ...clinic, default_appointment_duration_minutes: parseInt(e.target.value) || 30 })} min="5" max="480" step="5" />
                 </div>
               </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--gray-200)', margin: '20px 0', paddingTop: '20px' }}>
+              <h4 style={{ marginBottom: '12px' }}>Facturation</h4>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
+                <input type="checkbox" style={{ marginTop: '3px' }} checked={clinic.allow_cross_vet_invoice_edit} onChange={(e) => setClinic({ ...clinic, allow_cross_vet_invoice_edit: e.target.checked })} />
+                <span>
+                  <strong>Autoriser la modification des factures d'un autre veterinaire</strong>
+                  <span style={{ display: 'block', color: 'var(--gray-500)', fontSize: '0.85rem' }}>
+                    Recommande en environnement de confiance : chaque veterinaire peut corriger l'attribution (et donc la commission) des factures des confreres. Decochez pour limiter chacun a ses propres factures (l'administrateur garde tous les droits).
+                  </span>
+                </span>
+              </label>
             </div>
 
             <div style={{ borderTop: '1px solid var(--gray-200)', margin: '20px 0', paddingTop: '20px' }}>

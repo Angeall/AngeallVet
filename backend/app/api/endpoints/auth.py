@@ -86,6 +86,15 @@ def register(
         raise HTTPException(status_code=400, detail="Email déjà utilisé")
 
     tenant = tenant_from_request(request)
+    # M4: serialize the seat-cap check+insert per tenant with a transaction-scoped
+    # advisory lock, so two concurrent registers at cap-1 can't both slip past
+    # (Postgres only; the test/SQLite path is single-threaded and skips it).
+    if tenant.max_users and db.bind is not None and db.bind.dialect.name == "postgresql":
+        import zlib
+        from sqlalchemy import text
+
+        lock_key = zlib.crc32(f"seatcap:{tenant.slug}".encode()) & 0x7FFFFFFF
+        db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": lock_key})
     # Seat cap (from the subscription / signed license): refuse before any
     # side effect (no orphan PocketBase account) once the limit is reached.
     if tenant.max_users and db.query(User).filter(User.is_active == True).count() >= tenant.max_users:

@@ -95,6 +95,48 @@ def require_roles(*roles):
     return role_checker
 
 
+def _effective_permissions(role, db: Session) -> dict:
+    """Effective section permissions for a role: the admin-configured
+    ``RolePermission`` override if present, else the built-in ``DEFAULT_PERMISSIONS``.
+    This is the single source of truth the frontend already reads via /auth/permissions.
+    """
+    from app.models.user import RolePermission, DEFAULT_PERMISSIONS
+
+    row = db.query(RolePermission).filter(RolePermission.role == role).first()
+    if row and isinstance(row.permissions, dict):
+        return row.permissions
+    key = role.value if hasattr(role, "value") else str(role)
+    return DEFAULT_PERMISSIONS.get(key, {})
+
+
+def require_permission(section: str):
+    """Enforce the per-role section-access matrix server-side, for writes.
+
+    The frontend only *hides* sections; without this the API accepted the call
+    anyway (a `guest`/`accountant` could POST/DELETE in a section they shouldn't).
+    We gate the **mutating** methods only and leave GET reads open, so cross-section
+    lookups keep working (e.g. an accountant invoicing still reads an animal's name
+    even though `animals` is off for that role). ADMIN always passes; every other
+    role must have ``section`` enabled in its (configurable) permission set —
+    trusted clinics can re-open it by editing the role's ``RolePermission``.
+    """
+    def checker(request: Request, current_user=Depends(get_current_user), db: Session = Depends(get_request_db)):
+        from app.models.user import UserRole
+
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            return current_user
+        if current_user.role == UserRole.ADMIN:
+            return current_user
+        if not _effective_permissions(current_user.role, db).get(section, False):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Accès à cette section non autorisé pour votre rôle",
+            )
+        return current_user
+
+    return checker
+
+
 def tenant_has_module(request: Request, module_key: str) -> bool:
     """True if the current request's tenant has the given paid module unlocked."""
     return module_key in tenant_from_request(request).modules

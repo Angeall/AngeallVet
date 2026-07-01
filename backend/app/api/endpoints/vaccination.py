@@ -23,6 +23,9 @@ router = APIRouter(prefix="/vaccinations", tags=["Vaccinations"])
 
 _module = require_module(MODULE_VACCINE_PROTOCOLS)
 _admin = require_roles(UserRole.ADMIN)
+# A vaccination is a veterinary act — recording it is limited to vets (or admin),
+# mirroring medical.create_record. (Protocol config stays admin-only via _admin.)
+_vet = require_roles(UserRole.ADMIN, UserRole.VETERINARIAN)
 
 
 # ─── next-due engine ─────────────────────────────────────────────────────────
@@ -169,7 +172,7 @@ def _vax_dict(v: Vaccination) -> dict:
 def record_vaccination(
     data: VaccinationIn,
     db: Session = Depends(get_tenant_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_vet),
     _m: bool = Depends(_module),
 ):
     if not db.query(Animal).filter(Animal.id == data.animal_id).first():

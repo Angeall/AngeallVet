@@ -171,7 +171,14 @@ def create_entry(
         lot_number=data.lot_number,
         patient_animal_id=data.patient_animal_id,
         patient_owner_name=data.patient_owner_name,
-        prescribing_vet_id=data.prescribing_vet_id or current_user.id,
+        # H4: the prescriber on this legal register is the authenticated vet. Only
+        # an admin may attribute it to someone else (back-filling); a vet cannot
+        # spoof a colleague's identity on a narcotics entry.
+        prescribing_vet_id=(
+            data.prescribing_vet_id
+            if (current_user.role == UserRole.ADMIN and data.prescribing_vet_id)
+            else current_user.id
+        ),
         reason=data.reason,
         dosage=data.dosage,
         total_delivered=data.total_delivered,

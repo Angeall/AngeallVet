@@ -6,7 +6,7 @@ from datetime import datetime
 
 from app.api.deps import get_tenant_db
 from app.core.database import get_request_db
-from app.core.security import get_current_user, require_roles, tenant_has_module
+from app.core.security import get_current_user, require_roles, require_permission, tenant_has_module
 from app.core.licensing import MODULE_SMS, MODULE_LABELS
 from app.core.tenancy import tenant_from_request
 from app.core.mailer import send_email, MailerError
@@ -43,7 +43,8 @@ def list_communications(
     return query.order_by(Communication.created_at.desc()).offset(skip).limit(limit).all()
 
 
-@router.post("", response_model=CommunicationResponse, status_code=201)
+@router.post("", response_model=CommunicationResponse, status_code=201,
+             dependencies=[Depends(require_permission("communications"))])
 def send_communication(
     data: CommunicationCreate,
     request: Request,
@@ -104,7 +105,8 @@ def list_reminder_rules(
     return db.query(ReminderRule).order_by(ReminderRule.name).all()
 
 
-@router.post("/reminders", response_model=ReminderRuleResponse, status_code=201)
+@router.post("/reminders", response_model=ReminderRuleResponse, status_code=201,
+             dependencies=[Depends(require_permission("communications"))])
 def create_reminder_rule(
     data: ReminderRuleCreate,
     db: Session = Depends(get_tenant_db),
@@ -117,7 +119,8 @@ def create_reminder_rule(
     return rule
 
 
-@router.put("/reminders/{rule_id}", response_model=ReminderRuleResponse)
+@router.put("/reminders/{rule_id}", response_model=ReminderRuleResponse,
+            dependencies=[Depends(require_permission("communications"))])
 def update_reminder_rule(
     rule_id: int,
     data: ReminderRuleCreate,
@@ -136,7 +139,8 @@ def update_reminder_rule(
     return rule
 
 
-@router.delete("/reminders/{rule_id}", status_code=204)
+@router.delete("/reminders/{rule_id}", status_code=204,
+               dependencies=[Depends(require_permission("communications"))])
 def delete_reminder_rule(
     rule_id: int,
     db: Session = Depends(get_tenant_db),
@@ -227,7 +231,8 @@ def get_postal_due_reminders(
     return results
 
 
-@router.post("/reminders/run")
+@router.post("/reminders/run",
+             dependencies=[Depends(require_permission("communications"))])
 def run_reminders(
     request: Request,
     db: Session = Depends(get_tenant_db),
