@@ -18,6 +18,17 @@ from app.api.endpoints import (
 from app.api.endpoints import settings as settings_endpoints
 
 
+async def _reject_unknown_tenant(send):
+    """Send a 404 for a request whose Host maps to no known tenant (strict mode)."""
+    body = b'{"detail":"Tenant inconnu"}'
+    await send({
+        "type": "http.response.start",
+        "status": 404,
+        "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())],
+    })
+    await send({"type": "http.response.body", "body": body})
+
+
 class TenantMiddleware:
     """Pure-ASGI middleware: resolve the tenant from the Host sub-domain.
 
@@ -36,9 +47,20 @@ class TenantMiddleware:
         from app.core.tenancy import resolve_tenant_context, resolve_tenant_by_slug
 
         headers = {k.decode().lower(): v.decode() for k, v in (scope.get("headers") or [])}
-        slug = headers.get("x-tenant-slug")
         host = headers.get("x-forwarded-host") or headers.get("host") or ""
-        scope["tenant_ctx"] = resolve_tenant_by_slug(slug) if slug else resolve_tenant_context(host)
+        # The X-Tenant-Slug override lets a client pick any tenant, so it is a
+        # dev/testing convenience only — ignored in production, where the tenant
+        # MUST come from the (proxy-validated) Host. Caddy also strips it inbound.
+        slug = headers.get("x-tenant-slug") if settings.is_dev_env else None
+        if slug:
+            ctx = resolve_tenant_by_slug(slug)
+        else:
+            # Strict only for a central multi-tenant stack: an unknown sub-domain
+            # is rejected rather than silently served the default/central DB.
+            ctx = resolve_tenant_context(host, strict=settings.MULTI_TENANT and not settings.is_dev_env)
+        if ctx is None:
+            return await _reject_unknown_tenant(send)
+        scope["tenant_ctx"] = ctx
         return await self.app(scope, receive, send)
 
 
@@ -63,6 +85,15 @@ app.add_middleware(
 
 # Resolve the tenant (sub-domain) for every request before routing.
 app.add_middleware(TenantMiddleware)
+
+# Reject requests with an unexpected Host in production when a trusted-host
+# allow-list is configured (defense-in-depth against Host/X-Forwarded-Host
+# spoofing; Caddy already resets those headers at the edge). Added last so it is
+# the outermost layer and runs before tenant resolution.
+if not settings.is_dev_env and settings.trusted_hosts_list:
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts_list)
 
 
 @app.exception_handler(Exception)
@@ -213,8 +244,10 @@ def on_startup():
             "(it derives every tenant's JWT signing secret)."
         )
     if _is_prod and not settings.ENCRYPTION_KEY:
-        logger.warning(
-            "⚠ ENCRYPTION_KEY non défini — les secrets des tenants ne seront PAS chiffrés au repos."
+        raise RuntimeError(
+            "ENCRYPTION_KEY must be set in production: without it, tenant secrets "
+            "(DB passwords, PocketBase superuser password, Google OAuth refresh "
+            "tokens) would be stored in cleartext."
         )
 
     # 1. Ensure central database schema is up to date (tables + missing columns)

@@ -20,17 +20,39 @@
 }
 
 :80 {
-	# PocketBase, same-origin under /pb (prefix stripped before proxying).
-	handle_path /pb/* {
-		reverse_proxy pocketbase:8090
+	# Security headers on every response. HSTS is ignored by browsers over plain
+	# HTTP (dev) and takes effect once TLS is enabled in production.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+		# A Content-Security-Policy is strongly recommended but must be validated
+		# against the SPA (Recharts/FullCalendar inline styles). Enable after test:
+		# Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'"
 	}
 
+	# The tenant is resolved from the (proxy-set) Host only. Strip any client
+	# X-Tenant-Slug and reset X-Forwarded-Host so a request can't select or spoof
+	# another tenant by forging headers.
 	handle /api/* {
-		reverse_proxy backend:8000
+		reverse_proxy backend:8000 {
+			header_up -X-Tenant-Slug
+			header_up X-Forwarded-Host {host}
+		}
 	}
 
 	handle /uploads/* {
-		reverse_proxy backend:8000
+		reverse_proxy backend:8000 {
+			header_up -X-Tenant-Slug
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# PocketBase, same-origin under /pb (prefix stripped before proxying).
+	handle_path /pb/* {
+		reverse_proxy pocketbase:8090
 	}
 
 	handle {

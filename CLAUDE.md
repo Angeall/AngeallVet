@@ -23,6 +23,8 @@ python -m app.seed_demo                                      # demo data (needs 
 ```
 Migrations run automatically at startup; manual: `alembic upgrade head`.
 
+> **`APP_ENV` is secure-by-default: it defaults to `production`.** Production fails closed on the default `APP_SECRET_KEY`/`ENCRYPTION_KEY`, enforces the license (no free modules), hides Swagger, and (with `MULTI_TENANT=true`) 404s unknown sub-domains. For local dev **without Docker**, set `APP_ENV=development` in `backend/.env` (the docker-compose dev stack and the test suite set it for you).
+
 **Frontend** (run from `frontend/`):
 ```bash
 npm install

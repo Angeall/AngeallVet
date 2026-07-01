@@ -35,3 +35,28 @@ def test_uploads_not_publicly_served(client):
     """The public /uploads static mount has been removed; medical attachments are
     only reachable through the authenticated download endpoint."""
     assert client.get("/uploads/medical/1/secret.pdf").status_code == 404
+
+
+def test_resolve_tenant_context_strict_rejects_unknown_subdomain():
+    """A central multi-tenant stack must not fail-open onto the central DB: an
+    unknown sub-domain resolves to None (rejected), never the default tenant."""
+    from app.core.tenancy import resolve_tenant_context
+
+    # Bare/default host = single-clinic default tenant, even in strict mode.
+    assert resolve_tenant_context("angeallvet.localhost", strict=True).is_default
+    assert resolve_tenant_context("", strict=True).is_default
+    # Unknown sub-domain: rejected in strict mode, lenient fallback otherwise.
+    assert resolve_tenant_context("ghost.angeallvet.localhost", strict=True) is None
+    assert resolve_tenant_context("ghost.angeallvet.localhost", strict=False).is_default
+
+
+def test_unknown_tenant_rejected_in_strict_multitenant(client, monkeypatch):
+    """In production + MULTI_TENANT, a request for an unknown tenant sub-domain is
+    rejected (404) rather than silently served the default/central database."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    monkeypatch.setattr(settings, "MULTI_TENANT", True)
+    r = client.get("/api/v1/animals", headers={"host": "ghost.angeallvet.localhost"})
+    assert r.status_code == 404
+    assert r.json()["detail"] == "Tenant inconnu"

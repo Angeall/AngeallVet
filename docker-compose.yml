@@ -53,6 +53,10 @@ services:
     env_file:
       - .env
     environment:
+      # This is the dev stack (uvicorn --reload, source-mounted). APP_ENV defaults
+      # to "production" (secure by default) — pin it to development here so the
+      # local stack keeps its dev conveniences (Swagger, all modules on).
+      - APP_ENV=development
       # Backend reaches PocketBase over the internal Docker network.
       - POCKETBASE_URL=http://pocketbase:8090
     depends_on:

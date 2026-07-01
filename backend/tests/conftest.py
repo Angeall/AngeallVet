@@ -4,6 +4,10 @@ import uuid
 # Set DATABASE_URL to SQLite BEFORE any app imports, so database.py
 # creates an in-memory engine instead of trying to connect to PostgreSQL.
 os.environ["DATABASE_URL"] = "sqlite://"
+# APP_ENV now defaults to "production" (secure by default). The suite runs as a
+# dev environment so the dev conveniences hold (all modules on without a license,
+# startup secret guard relaxed, lenient tenant fallback). Set before app imports.
+os.environ["APP_ENV"] = "test"
 
 import pytest
 from fastapi.testclient import TestClient

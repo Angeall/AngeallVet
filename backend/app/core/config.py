@@ -6,7 +6,11 @@ import json
 class Settings(BaseSettings):
     # Application
     APP_NAME: str = "AngeallVet"
-    APP_ENV: str = "development"
+    # Secure by default: an unset APP_ENV is treated as production (fails closed
+    # on insecure secrets, enforces the license, hides Swagger). Local dev /
+    # tests MUST opt in with APP_ENV=development (docker-compose sets it; the
+    # test suite sets it in conftest).
+    APP_ENV: str = "production"
     APP_DEBUG: bool = True
     APP_SECRET_KEY: str = "dev-secret-key"
     APP_URL: str = "http://localhost:8000"
@@ -24,6 +28,13 @@ class Settings(BaseSettings):
     # (single-clinic deployment / local dev / tests).
     BASE_DOMAIN: str = "angeallvet.localhost"
     DEFAULT_TENANT_SLUG: str = "default"
+    # Central stack serving several tenants by sub-domain: set True so an unknown
+    # sub-domain is rejected (404) instead of silently falling back to the
+    # default/central database. Single-clinic / dev / tests keep it False.
+    MULTI_TENANT: bool = False
+    # Optional Host allow-list (comma list) enforced by TrustedHostMiddleware in
+    # production. Empty = disabled. e.g. "angeallvet.fr,*.angeallvet.fr".
+    TRUSTED_HOSTS: str = ""
 
     # --- PocketBase (authentication provider) --------------------------
     # Each tenant runs its OWN PocketBase instance (tenant-local auth).
@@ -117,6 +128,10 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         return json.loads(self.CORS_ORIGINS)
+
+    @property
+    def trusted_hosts_list(self) -> List[str]:
+        return [h.strip() for h in self.TRUSTED_HOSTS.split(",") if h.strip()]
 
     @property
     def is_dev_env(self) -> bool:

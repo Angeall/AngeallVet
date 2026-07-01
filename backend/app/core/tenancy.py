@@ -148,12 +148,22 @@ def _lookup_tenant(field: str, value: str) -> Optional[TenantContext]:
         return None
 
 
-def resolve_tenant_context(host: str) -> TenantContext:
-    """Resolve a tenant from a request Host header. Falls back to default."""
+def resolve_tenant_context(host: str, strict: bool = False) -> Optional[TenantContext]:
+    """Resolve a tenant from a request Host header.
+
+    No sub-domain (bare domain, localhost, testserver) → the default tenant
+    (single-clinic / dev). A sub-domain that matches a registered tenant → that
+    tenant. A sub-domain that matches *nothing* → the default tenant, unless
+    ``strict`` (central multi-tenant stack), in which case it returns ``None`` so
+    the caller can reject the request instead of fail-open onto the central DB.
+    """
     sub = extract_subdomain(host)
     if not sub:
         return default_tenant_context()
-    return _lookup_tenant("subdomain", sub) or _lookup_tenant("slug", sub) or default_tenant_context()
+    found = _lookup_tenant("subdomain", sub) or _lookup_tenant("slug", sub)
+    if found:
+        return found
+    return None if strict else default_tenant_context()
 
 
 def resolve_tenant_by_slug(slug: str) -> TenantContext:
